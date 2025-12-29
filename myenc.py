@@ -12,10 +12,10 @@ def generate_seed_derive_key(seed_bytes):
     salt_hash = hashes.Hash(hashes.SHA256(), backend=default_backend())
     salt_hash.update(seed_bytes[:16])
     derived_salt = salt_hash.finalize()[:16]
-    
+
     kdf = PBKDF2HMAC(hashes.SHA256(), 48, derived_salt, 100000)
     key_iv = kdf.derive(seed_bytes)
-    
+
     return key_iv[:32], key_iv[32:], derived_salt
 
 def format_c_array(data):
@@ -33,8 +33,6 @@ def preview_hex(data, name):
     return f"{name}: {len(data)}b [{first8}...{last8}]"
 
 def encrypt_with_seed(input_file, output_file):
-    print("aes encryption - demon.x64.h")
-    
     if not os.path.exists(input_file):
         print(f"❌ {input_file} introuvable")
         return False
@@ -49,11 +47,12 @@ def encrypt_with_seed(input_file, output_file):
     print(f"[+] salt (dyn): {salt.hex()}")
     print(f"[+] key (aes256): {key.hex()}")
     print(f"[+] iv (cbc): {iv.hex()}")
-    
-    print("")  
-    
+
+    print("")
+
     print(preview_hex(plaintext, f"[+] {os.path.basename(input_file)}"))
-    
+    print(f"[+] Plaintext first 16b: {plaintext[:16].hex()}")
+
     cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
     encryptor = cipher.encryptor()
 

