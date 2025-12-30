@@ -14,7 +14,7 @@ extern "C" {
         PVOID ProcessInformation, ULONG ProcessInformationLength,
         PULONG ReturnLength
     );
-    
+
     __declspec(dllimport) NTSTATUS NTAPI NtUnmapViewOfSection(
         HANDLE ProcessHandle, PVOID BaseAddress
     );
@@ -25,15 +25,17 @@ private:
     HANDLE hProcess = nullptr;
     HANDLE hThread = nullptr;
     DWORD processId = 0;
-    
+    bool verbose = false;
+
     bool create_suspended_process(const wchar_t* target_path);
-    bool unmap_target_image();  // ← AJOUTÉ !
 
 public:
-    ProcessHollower() = default;
+    ProcessHollower(bool verbose_mode = false) : verbose(verbose_mode) {}
     ~ProcessHollower();
-    
-    bool HollowProcess(const wchar_t* target_exe, const std::vector<uint8_t>& shellcode);
+
+    // Hollowing: create suspended + PE entry point injection
+    bool HollowProcess(const wchar_t* target_exe, const std::vector<uint8_t>& payload);
+
     bool IsValid() const { return hProcess && hProcess != INVALID_HANDLE_VALUE; }
 };
 

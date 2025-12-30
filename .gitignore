@@ -2,3 +2,4 @@
 *.exe
 demon.x64.h
 old
+.fuse*
