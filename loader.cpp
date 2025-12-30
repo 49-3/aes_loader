@@ -47,8 +47,18 @@ Config parse_args(int argc, char* argv[]) {
         }
         else if (arg == "-p" || arg == "--pid") {
             if (i + 1 < argc) {
-                cfg.target_pid = std::stoul(argv[++i]);
-                cfg.do_apc = true;
+                try {
+                    cfg.target_pid = std::stoul(argv[++i]);
+                    cfg.do_apc = true;
+                } catch (const std::invalid_argument& e) {
+                    std::cerr << "[-] Invalid PID format: " << argv[i] << "\n";
+                    print_usage(argv[0]);
+                    exit(1);
+                }
+            } else {
+                std::cerr << "[-] -p/--pid requires a PID argument\n";
+                print_usage(argv[0]);
+                exit(1);
             }
         }
         else if (arg == "-u" || arg == "--uac") {

