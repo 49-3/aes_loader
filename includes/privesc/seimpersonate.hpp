@@ -5,6 +5,8 @@
 #include <string>
 #include <cstdint>
 
+class easCipher42;
+
 /**
  * SeImpersonateHandler
  *
@@ -34,6 +36,9 @@ private:
     HANDLE hPipeEvent = INVALID_HANDLE_VALUE;
     HANDLE hTriggerThread = INVALID_HANDLE_VALUE;
 
+    // Cipher reference for decrypting strings
+    easCipher42& cipher;
+
     // Configuration
     std::string pipeName;
     bool verbose = false;
@@ -59,7 +64,7 @@ private:
     bool TriggerPrinterBugExternal(const std::string& pipeName);
 
 public:
-    SeImpersonateHandler(bool verboseMode = false);
+    SeImpersonateHandler(easCipher42& cipher_ref, bool verboseMode = false);
     ~SeImpersonateHandler();
 
     // Main public interface

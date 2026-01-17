@@ -1,5 +1,116 @@
 # AES Loader - Complete Usage Guide
 
+---
+
+## 📁 Structure du Projet
+
+Le loader est organisé en modules fonctionnels pour faciliter la maintenance :
+
+```
+aes_loader/
+├── builder.sh                 # Script de compilation automatisé
+├── myenc.py                  # Générateur de chiffrement (payload + 14 strings)
+├── edr_strings.conf          # 14 strings sensibles à chiffrer
+│
+├── src/                      # Code source organisé par module
+│   ├── loader.cpp            # Point d'entrée principal
+│   ├── crypto/               # AES-256-CBC + PBKDF2
+│   │   ├── easCipher42.cpp
+│   │   └── crypto_funcs.cpp
+│   ├── injection/            # Process hollowing + APC injection
+│   │   ├── process_hollower.cpp
+│   │   └── process_injection.cpp
+│   ├── bypass/               # Anti-VM + UAC bypass
+│   │   ├── bypass_analysis.cpp
+│   │   └── uac_bypass.cpp
+│   ├── privesc/              # SeImpersonate + PrintSpoofer
+│   │   ├── seimpersonate.cpp
+│   │   └── printspoofer_trigger.cpp
+│   └── rpc/                  # RPC stubs MS-RPRN (MIDL-generated)
+│       ├── ms-rprn_c.c
+│       └── rpc_helpers.c
+│
+├── includes/                 # Headers + demon.x64.h (généré au build)
+│   ├── demon.x64.h          # Payload + 14 strings EDR chiffrées
+│   ├── crypto/, injection/, bypass/, privesc/, rpc/
+│
+└── obj/                      # Fichiers objets (créé automatiquement au build)
+```
+
+---
+
+## 🔧 Build & Compilation
+
+### Build Standard
+```bash
+# Build x64 (défaut)
+./builder.sh demon.x64.bin
+
+# Build x86
+./builder.sh demon.x64.bin x86
+```
+
+**Output:** `loader.exe` (nom fixe, pas d'argument de sortie)
+
+### Nettoyage
+```bash
+# Supprime loader.exe, includes/demon.x64.h, obj/
+./builder.sh --clean
+./builder.sh -c              # Alias de --clean
+```
+
+### Ce que builder.sh fait automatiquement
+
+1. **Chiffre le payload + 14 strings EDR** avec `myenc.py`
+   - Lit `edr_strings.conf` et chiffre toutes les strings sensibles
+   - Génère `includes/demon.x64.h` avec les arrays chiffrés
+   - 14 strings: fodhelper paths, registry, spoolsv, pipe names, SDDL, etc.
+
+2. **Compile tous les modules** depuis `src/` vers `obj/`
+   - src/crypto/*.cpp → obj/easCipher42.o, obj/crypto_funcs.o
+   - src/injection/*.cpp → obj/process_hollower.o, obj/process_injection.o
+   - src/bypass/*.cpp → obj/bypass_analysis.o, obj/uac_bypass.o
+   - src/privesc/*.cpp → obj/seimpersonate.o, obj/printspoofer_trigger.o
+   - src/rpc/*.c → obj/ms-rprn_c.o, obj/rpc_helpers.o
+   - src/loader.cpp → obj/loader.o
+
+3. **Cross-compile** avec mingw-w64 (x64 ou x86)
+
+4. **Link** avec RPC libraries (rpcrt4, advapi32, kernel32, etc.)
+
+5. **Strip** debug symbols pour binary plus léger
+
+6. **Cleanup** .o files automatiquement
+
+**Logs de build:**
+```
+[*] Encrypting payload and EDR strings...
+14 strings EDR chargées depuis edr_strings.conf
+[*] Compiling loader (x64)...
+[+] Compilation successful: loader.exe (~150KB)
+```
+
+---
+
+## 🔒 OPSEC - Strings Chiffrées
+
+**14 strings sensibles entièrement chiffrées** (voir [EDR_STRINGS_AUDIT.md](EDR_STRINGS_AUDIT.md)) :
+
+| Module | Strings | Impact |
+|--------|---------|--------|
+| UAC Bypass | fodhelper paths, registry, DelegateExecute, shell verb, svchost | Signatures UAC bypass invisibles |
+| Bypass Analysis | kernel32.dll, VirtualAllocExNuma | Anti-VM checks obfusqués |
+| SeImpersonate | S-1-5-18, pipe paths, spoolsv.exe, desktop, cmd.exe, SDDL | PrintSpoofer signatures masquées |
+
+**Vérification:**
+```bash
+strings loader.exe | grep -i "DelegateExecute"    # ✅ Vide
+strings loader.exe | grep -i "spoolss"            # ✅ Vide
+strings loader.exe | grep -i "S-1-5-18"           # ✅ Vide
+```
+
+---
+
 ## IMPORTANT NOTES
 
 ### Privilege Requirements by Feature

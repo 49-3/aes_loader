@@ -3,15 +3,19 @@
 
 #include <string>
 
+class easCipher42;
+
 class BypassAnalysis {
 private:
     bool verbose = false;
+    easCipher42& cipher;
 
     bool check_virtualization();
     bool check_sleep_timing();
 
 public:
-    BypassAnalysis(bool verbose_mode = false) : verbose(verbose_mode) {}
+    BypassAnalysis(easCipher42& cipher_ref, bool verbose_mode = false)
+        : cipher(cipher_ref), verbose(verbose_mode) {}
 
     bool run_checks();
 };

