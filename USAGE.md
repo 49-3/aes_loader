@@ -11,7 +11,7 @@
 | HOLLOW with `-f` (custom process) | User | **MUST use full path** (see Path Requirements below) |
 | PPID Spoofing (`--ppid`) | **ADMIN** | Requires elevated privileges to OpenProcess parent |
 | APC into system process | User/ADMIN | Depends on target process - system processes need ADMIN |
-| SeImpersonate escalation (`-i`) | User with SeImpersonate | Elevates to SYSTEM (see separate section) |
+| SeImpersonate escalation (`-i`) | **User with SeImpersonate** | Elevates to SYSTEM - **PrintSpoofer RPC AUTO** |
 
 ### Path Requirements for `-f` (Custom Process)
 
@@ -52,12 +52,13 @@
 
 ## Overview
 
-The AES Loader supports 4 operational modes:
+The AES Loader supports 5 operational modes:
 
 1. **DEFAULT** - Spawn svchost.exe + APC injection (no mode flag required)
 2. **HOLLOW** - Process hollowing (create new process and replace code)
 3. **APC** - Async Procedure Call injection into existing process
 4. **UAC** - UAC bypass via fodhelper exploit
+5. **SeImpersonate** - Escalate to SYSTEM via integrated PrintSpoofer RPC (flag `-i`)
 
 ---
 
@@ -177,6 +178,106 @@ The AES Loader supports 4 operational modes:
 [-] OpenProcess failed: error 5
 ```
 **Error 5 = ACCESS_DENIED**: Elevation to admin required, or target process is protected
+
+---
+
+## SEIMPERSONATE MODE: Privilege Escalation to SYSTEM
+
+### How SeImpersonate Works
+
+The `-i` (impersonate) flag enables **privilege escalation to SYSTEM** via Print Spooler RPC coercion (MS-RPRN):
+
+**Step-by-step execution:**
+1. **Named pipe creation**: Creates UUID-named pipe `\.\pipe\{UUID}\pipe\spoolss`
+2. **RPC trigger**: Attacker triggers spoolsv.exe (SYSTEM) to connect via named pipe
+3. **Token impersonation**: Impersonates SYSTEM token from spoolsv connection
+4. **Process relaunching**: Relaunches loader **without `-i`** using SYSTEM token
+5. **Session context**: New loader runs in Session 1 (interactive) + SYSTEM privileges
+6. **Normal execution**: Relaunched loader executes injection normally with SYSTEM context
+
+### Requirements for SeImpersonate
+
+- Must run as user with **SeImpersonate privilege** (e.g., NETWORK SERVICE, LOCAL SERVICE, IIS APPPOOL)
+- **No external tools required** - PrintSpoofer RPC trigger integrated in loader
+- Print Spooler service (spoolsv.exe) must be running on target
+- MS-RPRN protocol must be accessible (default on most Windows systems)
+
+### Basic Usage with DEFAULT Mode
+```bash
+./loader.exe -i -v
+```
+**Behavior:**
+1. Creates named pipe with UUID: `\\.\pipe\{UUID}\pipe\spoolss`
+2. **Automatically spawns async RPC trigger thread** (PrintSpoofer integrated)
+3. RPC thread calls RpcOpenPrinter + RpcRemoteFindFirstPrinterChangeNotificationEx
+4. Main thread waits for spoolsv.exe connection (timeout: 25-35 seconds with jitter)
+5. Impersonates SYSTEM token when spoolsv.exe connects
+6. Relaunches loader without `-i` flag as SYSTEM (Session 1)
+7. Spawns svchost + APC injects payload **as SYSTEM**
+8. Meterpreter callback executes **in SYSTEM context**
+
+**No attacker-side action required** - RPC coercion is automatic and integrated.
+
+### SeImpersonate with HOLLOW Mode
+```bash
+./loader.exe -i -m hollow -v
+./loader.exe -i -m hollow -f C:\Windows\System32\calc.exe -v
+```
+**Behavior:**
+1. Escalates to SYSTEM via SeImpersonate
+2. Relaunches with `-m hollow` (removes `-i` flag)
+3. Creates custom target process **as SYSTEM** (Session 1)
+4. Payload executes **in SYSTEM context**
+
+### SeImpersonate with APC Injection
+```bash
+./loader.exe -i -m apc -p 1464 -v
+```
+**Behavior:**
+1. Escalates to SYSTEM via SeImpersonate
+2. Relaunches with `-m apc -p 1464` (removes `-i` flag)
+3. Injects into existing process 1464 **with SYSTEM privileges**
+4. **⚠️ Important**: Payload executes in **target process context**
+   - If target (1464) is explorer.exe (user-owned) → code runs as USER
+   - If target (1464) is svchost.exe (SYSTEM) → code runs as SYSTEM
+   - Shellcode inherits injection process privileges, not loader privileges
+
+### SeImpersonate with Custom Command
+```bash
+./loader.exe -i -c "cmd.exe /c whoami > c:\temp\whoami.txt"
+```
+**Behavior:**
+1. Escalates to SYSTEM via SeImpersonate
+2. Spawns custom command **as SYSTEM** using CreateProcessWithTokenW
+3. Command executes in SYSTEM context
+4. **Note**: This is the ONLY case where `-i` doesn't relaunch - it directly executes
+
+### Access Denied in SeImpersonate
+
+```bash
+./loader.exe -i -v
+[-] OpenProcess failed: error 5
+```
+**Cause**: Thread is still in original context (SYSTEM token not obtained yet)
+**Solution**: Wait for integrated PrintSpoofer RPC trigger to complete - timeout is 25-35 seconds
+
+### Opsec Considerations for SeImpersonate
+
+✅ **Good OPSEC:**
+- Uses UUID-named pipes (avoids hardcoded pipe names)
+- Jittered timeouts (25-35 seconds, random ±5s)
+- Single impersonation call per pipe
+- No verbose service enumeration
+- Token is SYSTEM from legitimate RPC source
+- **No external tools required** - PrintSpoofer RPC integrated in loader
+- RPC calls run in async thread (non-blocking)
+
+⚠️ **Trade-offs:**
+- Creates named pipe observable in ETW
+- Spoolsv.exe process logs may show RPC connection attempt
+- 25-35 second wait window is noticeable
+- Requires Print Spooler service running (spoolsv.exe)
+- MS-RPRN RPC calls generate network activity logs
 
 ---
 
